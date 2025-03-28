@@ -9,7 +9,9 @@ from python_bugreport_parser.bugreport import (
     BugreportTxt,
     Metadata,
     Section,
-    SectionContent,
+    DumpsysSection,
+    LogcatSection,
+    OtherSection,
 )  # Import your actual classes
 
 
@@ -60,17 +62,17 @@ class TestBugreport(unittest.TestCase):
         system_log = next(
             (s for s in self.bugreport.sections if s.name == "SYSTEM LOG"), None
         )
-        self.assertIsInstance(system_log.content, SectionContent.SystemLog)
+        self.assertIsInstance(system_log.content, LogcatSection)
 
         event_log = next(
             (s for s in self.bugreport.sections if s.name == "EVENT LOG"), None
         )
-        self.assertIsInstance(event_log.content, SectionContent.EventLog)
+        self.assertIsInstance(event_log.content, LogcatSection)
 
         dumpsys = next(
             (s for s in self.bugreport.sections if s.name == "DUMPSYS"), None
         )
-        self.assertIsInstance(dumpsys.content, SectionContent.Dumpsys)
+        self.assertIsInstance(dumpsys.content, DumpsysSection)
 
         other = next(
             (
@@ -80,7 +82,7 @@ class TestBugreport(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsInstance(other.content, SectionContent.Other)
+        self.assertIsInstance(other.content, OtherSection)
 
     def test_parse_line(self):
         matches = self.bugreport.read_and_slice()
@@ -94,7 +96,7 @@ class TestBugreport(unittest.TestCase):
         first_syslog = system_log_sections[0]
         self.assertEqual(
             len(first_syslog.content.entries),
-            first_syslog.end_line - first_syslog.start_line - 7,
+            first_syslog.end_line - first_syslog.start_line + 1 - 7,
         )
 
         # Test second SYSTEM LOG section
@@ -102,12 +104,12 @@ class TestBugreport(unittest.TestCase):
             second_syslog = system_log_sections[1]
             self.assertEqual(
                 len(second_syslog.content.entries),
-                second_syslog.end_line - second_syslog.start_line - 2,
+                second_syslog.end_line - second_syslog.start_line + 1 - 2,
             )
 
         # Test EVENT LOG section
         event_log = next(s for s in self.bugreport.sections if s.name == "EVENT LOG")
         self.assertEqual(
             len(event_log.content.entries),
-            event_log.end_line - event_log.start_line - 1,
+            event_log.end_line - event_log.start_line + 1 - 1,
         )

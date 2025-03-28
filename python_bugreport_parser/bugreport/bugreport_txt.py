@@ -4,50 +4,15 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from python_bugreport_parser.bugreport.metadata import Metadata
-
-# Assume these regex patterns are defined similarly to Rust version
-SECTION_END = re.compile(
-    r"------ (\d+.\d+)s was the duration of '((.*?)(?: \(.*\))?|for_each_pid\((.*)\))' ------"
+from python_bugreport_parser.bugreport.section import (
+    DumpsysSection,
+    LogcatSection,
+    OtherSection,
+    Section,
+    SECTION_END,
+    SECTION_BEGIN,
+    SECTION_BEGIN_NO_CMD,
 )
-SECTION_BEGIN = re.compile(r"------ (.*?)(?: \((.*)\)) ------")
-SECTION_BEGIN_NO_CMD = re.compile(r"^------ ([^(]+) ------$")
-
-
-# class Metadata:
-#     def __init__(self):
-#         self.lines_passed = 0
-#         self.timestamp: Optional[str] = None  # Should be a datetime object
-
-#     def parse(self, lines: List[str]) -> None:
-#         # Implement metadata parsing logic
-#         pass
-
-
-class SectionContent:
-    class LogcatSection:
-        def __init__(self, entries: List[str]):
-            self.entries = entries
-
-    class Dumpsys:
-        def __init__(self):
-            self.data = {}
-
-    class Other:
-        pass
-
-
-class Section:
-    def __init__(
-        self, name: str, start_line: int, end_line: int, content: SectionContent
-    ):
-        self.name = name
-        self.start_line = start_line
-        self.end_line = end_line
-        self.content = content
-
-    def parse(self, lines: List[str], year: int) -> None:
-        # Implement section parsing logic
-        pass
 
 
 class BugreportTxt:
@@ -65,14 +30,8 @@ class BugreportTxt:
         self.pair_sections(matches)
 
     def read_and_slice(self) -> List[Tuple[int, str]]:
-        try:
-            bugreport = self.raw_file.read().decode("utf-8")
-        except UnicodeDecodeError:
-            bugreport = self.raw_file.read().decode("utf-8", errors="replace")
+        lines = self._read_file()
 
-        lines = bugreport.split(
-            "\n"
-        )  # splitlines() is not used since there are other characters that may cause wrong linebreaks
         self.metadata.parse(lines)
 
         matches = []
@@ -80,7 +39,6 @@ class BugreportTxt:
         def filter_and_add(matches: list, line_number: int, group: str):
             if group == "BLOCK STAT" or group.endswith("PROTO"):
                 return
-            # print(f"Found {group} at line {line_number}")
             matches.append((line_number, group))
 
         for line_num, line in enumerate(
@@ -99,10 +57,8 @@ class BugreportTxt:
         return matches
 
     def pair_sections(self, matches: List[Tuple[int, str]]) -> None:
-        bugreport = self.raw_file.read().decode("utf-8")
-        lines = bugreport.split("\n")
+        lines = self._read_file()
         second_occurrence = False
-        FOR_EACH_PID = re.compile(r"for_each_pid\((.*)\)")
 
         for idx, (line_num, content) in enumerate(matches):
             if idx > 0 and matches[idx - 1][1] in content:
@@ -120,14 +76,12 @@ class BugreportTxt:
                 continue
 
             # Create appropriate section content
-            if content == "SYSTEM LOG":
-                section_content = SectionContent.SystemLog([])
-            elif content == "EVENT LOG":
-                section_content = SectionContent.EventLog([])
+            if content == "SYSTEM LOG" or content == "EVENT LOG":
+                section_content = LogcatSection([])
             elif content == "DUMPSYS":
-                section_content = SectionContent.Dumpsys()
+                section_content = DumpsysSection()
             else:
-                section_content = SectionContent.Other()
+                section_content = OtherSection()
 
             current_section = Section(
                 name=content,
@@ -146,3 +100,21 @@ class BugreportTxt:
 
     def get_sections(self) -> List[Section]:
         return self.sections
+
+    def _read_file(self) -> List[str]:
+        """
+        Reads the content of the raw file, decodes it using UTF-8, and handles any encoding errors by replacing invalid characters.
+
+        Returns:
+            List[str]: A list of strings where each string represents a line from the file.
+        
+        Notes:
+            - The file pointer is reset to the beginning after reading.
+            - Lines are split using the newline character ("\n") instead of `splitlines()` to avoid issues with non-standard linebreak characters.
+        """
+        content = self.raw_file.read().decode("utf-8", errors="replace")
+        self.raw_file.seek(0)  # Reset the file pointer to the beginning
+
+        # splitlines() is not used since there are other characters that may cause wrong linebreaks
+        lines = content.split("\n")
+        return lines
