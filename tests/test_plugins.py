@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock
 import zipfile
 
-from .context import python_bugreport_parser
+from .context import python_bugreport_parser, TEST_BUGREPORT_TXT
 from python_bugreport_parser.bugreport.section import LogcatLine, Section
 from python_bugreport_parser.bugreport import BugreportTxt
 from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
@@ -17,8 +17,7 @@ from python_bugreport_parser.plugins.input_focus_plugin import (
 class TestTimestampPlugin(unittest.TestCase):
     def setUp(self):
         # Setup similar to Rust's test_setup_bugreport
-        self.bugreport = BugreportTxt("tests/data/example.txt")
-        self.bugreport.load()
+        self.bugreport = TEST_BUGREPORT_TXT
 
     def test_timestamp_plugin(self):
         plugin = TimestampPlugin()
@@ -50,8 +49,7 @@ class TestInputFocusPlugin(unittest.TestCase):
 
             print("Extraction complete.")
 
-        self.bugreport = BugreportTxt(self.example_txt)
-        self.bugreport.load()
+        self.bugreport = TEST_BUGREPORT_TXT
 
         self.plugin = InputFocusPlugin()
         # self.mock_section = Mock(spec=Section)
