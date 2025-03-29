@@ -1,17 +1,19 @@
 import mmap
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from python_bugreport_parser.bugreport.metadata import Metadata
 from python_bugreport_parser.bugreport.section import (
+    SECTION_BEGIN,
+    SECTION_BEGIN_NO_CMD,
+    SECTION_END,
     DumpsysSection,
     LogcatSection,
     OtherSection,
     Section,
-    SECTION_END,
-    SECTION_BEGIN,
-    SECTION_BEGIN_NO_CMD,
+    SystemPropertySection,
 )
 
 
@@ -46,13 +48,13 @@ class BugreportTxt:
         ):
             if match := SECTION_END.search(line):
                 if group := match.group(2):
-                    filter_and_add(matches, line_num + 1, group)
+                    filter_and_add(matches, line_num, group)
             elif match := SECTION_BEGIN.search(line):
                 if group := match.group(1):
-                    filter_and_add(matches, line_num + 1, group)
+                    filter_and_add(matches, line_num, group)
             elif match := SECTION_BEGIN_NO_CMD.search(line):
                 if group := match.group(1):
-                    filter_and_add(matches, line_num + 1, group)
+                    filter_and_add(matches, line_num, group)
 
         return matches
 
@@ -77,9 +79,11 @@ class BugreportTxt:
 
             # Create appropriate section content
             if content == "SYSTEM LOG" or content == "EVENT LOG":
-                section_content = LogcatSection([])
+                section_content = LogcatSection()
             elif content == "DUMPSYS":
                 section_content = DumpsysSection()
+            elif content == "SYSTEM PROPERTIES":
+                section_content = SystemPropertySection()
             else:
                 section_content = OtherSection()
 
@@ -90,9 +94,10 @@ class BugreportTxt:
                 content=section_content,
             )
 
+            this_year = datetime.now().year
             current_section.parse(
                 lines[start_line + 1 : end_line],
-                self.metadata.timestamp.year if self.metadata.timestamp else 2023,
+                self.metadata.timestamp.year if self.metadata.timestamp else this_year,
             )
 
             self.sections.append(current_section)
@@ -107,7 +112,7 @@ class BugreportTxt:
 
         Returns:
             List[str]: A list of strings where each string represents a line from the file.
-        
+
         Notes:
             - The file pointer is reset to the beginning after reading.
             - Lines are split using the newline character ("\n") instead of `splitlines()` to avoid issues with non-standard linebreak characters.

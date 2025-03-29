@@ -17,6 +17,7 @@ LOGCAT_LINE_REGEX = re.compile(
 DUMPSYS_REGEX = re.compile(
     r"--------- \d\.\d+s was the duration of dumpsys (.*), ending at"
 )
+SYSTEM_PROPERTY_REGEX = re.compile(r"\[([^\]]*)\]: \[([^\]]*)\]", re.DOTALL)
 
 
 @dataclass
@@ -80,8 +81,8 @@ class SectionContent(ABC):
 
 
 class LogcatSection(SectionContent):
-    def __init__(self, lines: List[LogcatLine] = None):
-        self.entries = lines or []
+    def __init__(self):
+        self.entries = []
 
     def __len__(self) -> int:
         return len(self.entries)
@@ -134,6 +135,16 @@ class DumpsysSection(SectionContent):
                 temp += line + "\n"
 
 
+class SystemPropertySection(SectionContent):
+    def __init__(self):
+        self.properties = {}
+
+    def parse(self, lines: List[str], year: int) -> None:
+        lines_concated = "\n".join(lines)
+        for match in SYSTEM_PROPERTY_REGEX.finditer(lines_concated):
+            self.properties[match.group(1)] = match.group(2)
+
+
 class OtherSection(SectionContent):
     def parse(self, lines, year):
         pass
@@ -149,12 +160,7 @@ class Section:
         self.content = content
 
     def parse(self, lines: List[str], year: int) -> None:
-        if isinstance(self.content, LogcatSection):
-            self.content.parse(lines, year)
-        elif isinstance(self.content, DumpsysSection):
-            self.content.parse(lines, year)
-        else:
-            self.content.parse(lines, year)
+        self.content.parse(lines, year)
 
     def get_line_numbers(self) -> int:
         return self.end_line - self.start_line + 1

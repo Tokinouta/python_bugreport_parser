@@ -11,6 +11,7 @@ from python_bugreport_parser.bugreport import (
     Section,
     DumpsysSection,
     LogcatSection,
+    SystemPropertySection,
     OtherSection,
 )  # Import your actual classes
 
@@ -74,6 +75,11 @@ class TestBugreport(unittest.TestCase):
         )
         self.assertIsInstance(dumpsys.content, DumpsysSection)
 
+        system_props = next(
+            s for s in self.bugreport.sections if s.name == "SYSTEM PROPERTIES"
+        )
+        self.assertIsInstance(system_props.content, SystemPropertySection)
+
         other = next(
             (
                 s
@@ -112,4 +118,18 @@ class TestBugreport(unittest.TestCase):
         self.assertEqual(
             len(event_log.content.entries),
             event_log.end_line - event_log.start_line + 1 - 1,
+        )
+
+        # Test SYSTEM PROPERTIES section
+        system_props = next(
+            s for s in self.bugreport.sections if s.name == "SYSTEM PROPERTIES"
+        )
+        print(system_props.start_line, system_props.end_line)
+        self.assertEqual(
+            system_props.content.properties["persist.sys.boot.reason.history"],
+            "reboot,1723775375\nreboot,1723774219\nreboot,1723648846\nreboot,1723598091",
+        )
+        # The above property costs 3 extra lines, so minus 3 here
+        self.assertEqual(
+            len(system_props.content.properties), system_props.get_line_numbers() - 3
         )
