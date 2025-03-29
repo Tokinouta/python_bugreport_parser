@@ -38,6 +38,7 @@ class Bugreport:
             extract_path=extract_path,
         )
         bugreport.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
+        bugreport.bugreport_txt.load()
         return bugreport
 
     @classmethod

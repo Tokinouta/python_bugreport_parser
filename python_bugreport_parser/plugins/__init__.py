@@ -1,12 +1,15 @@
-from abc import ABC, abstractmethod
+import importlib
+import inspect
 import logging
-from importlib.metadata import entry_points
 import threading
+from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List, Optional
 
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 
 logger = logging.getLogger(__name__)
+plugin_dir = Path(__file__).parent
 
 
 class BasePlugin(ABC):
@@ -62,5 +65,34 @@ class PluginRepo:
             reports = [plugin.report() for plugin in cls._plugins]
             return "\n".join(reports)
 
+    # Registerations for plugins at the import of this module
+    @classmethod
+    def load_plugins(cls):
+        # Scan the plugin directory
+        plugin_files = Path(plugin_dir).glob("*.py")
 
-# Registerations for plugins at the import of this module
+        with cls._lock:
+            for file_path in plugin_files:
+                module_name = file_path.stem  # e.g., "foo" from "foo.py"
+                if module_name == "__init__":
+                    continue
+                try:
+                    # Import the module dynamically
+                    module = importlib.import_module(f"python_bugreport_parser.plugins.{module_name}")
+
+                    # Find all classes in the module that inherit from BasePlugin
+                    for _, plugin_cls in inspect.getmembers(module, inspect.isclass):
+                        if (
+                            issubclass(plugin_cls, BasePlugin)
+                            and plugin_cls is not BasePlugin
+                        ):
+                            plugin_instance = plugin_cls()
+                            cls._plugins.append(plugin_instance)
+                            break  # Assume one plugin per file for simplicity
+
+                except Exception as e:
+                    print(f"Failed to load {module_name}: {e}")
+            print(f"Successfully loaded the following plugins: {[plugin.name() for plugin in cls._plugins]}")
+
+
+PluginRepo.load_plugins()
