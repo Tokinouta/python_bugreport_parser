@@ -19,8 +19,9 @@ class TestMetadataParsing(unittest.TestCase):
 
     def test_parse_version(self):
         line = "Build fingerprint: 'Xiaomi/haotian/haotian:15/AQ3A.240812.002/OS2.0.107.0.VOBCNXM:userdebug/test-keys'"
-        result = Metadata.parse_version(line)
-        self.assertEqual(result, "OS2.0.107.0.VOBCNXM")
+        version, product = Metadata.parse_version_and_product(line)
+        self.assertEqual(version, "OS2.0.107.0.VOBCNXM")
+        self.assertEqual(product, "haotian")
 
     def test_parse_uptime(self):
         line = "Uptime: up 0 weeks, 0 days, 1 hour, 59 minutes"
@@ -42,6 +43,9 @@ class TestMetadataParsing(unittest.TestCase):
 
         # Test version
         self.assertEqual(metadata.version, "V816.0.12.0.UNCMIXM")
+
+        # Test product
+        self.assertEqual(metadata.product, "houji_global")
 
         # Test uptime (32 minutes)
         self.assertEqual(

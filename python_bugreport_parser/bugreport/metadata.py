@@ -11,6 +11,7 @@ class Metadata:
     def __init__(self):
         self.timestamp: datetime = datetime.now()
         self.version: str = ""
+        self.product: str = ""
         self.uptime: timedelta = timedelta()
         self.lines_passed: int = 0
 
@@ -25,7 +26,7 @@ class Metadata:
             if line.startswith("== dumpstate: "):
                 self.timestamp = self.parse_timestamp(line)
             elif line.startswith("Build fingerprint:"):
-                self.version = self.parse_version(line)
+                self.version, self.product = self.parse_version_and_product(line)
             elif line.startswith("Uptime:"):
                 self.uptime = self.parse_uptime(line)
                 break  # Stop after parsing uptime
@@ -49,12 +50,12 @@ class Metadata:
             raise ValueError(f"Invalid timestamp format: {timestamp_str}") from e
 
     @staticmethod
-    def parse_version(line: str) -> str:
-        """Extract version from build fingerprint"""
+    def parse_version_and_product(line: str) -> str:
+        """Extract version and product from build fingerprint"""
         match = VERSION_REGEX.match(line)
         if not match:
             raise ValueError(f"Invalid version line: {line}")
-        return match.group(5)
+        return match.group(5), match.group(2)
 
     @staticmethod
     def parse_uptime(line: str) -> timedelta:
