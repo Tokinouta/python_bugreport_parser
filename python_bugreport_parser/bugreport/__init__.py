@@ -10,6 +10,7 @@ from python_bugreport_parser.bugreport.section import (
     DumpsysEntry
 )
 from python_bugreport_parser.bugreport.metadata import Metadata
+from python_bugreport_parser.bugreport.dumpsys_entry import MqsServiceDumpsysEntry
 
 # TODO: There is actually one more layer of abstraction, which I call 284 log here. 
 # 284 log -> Bugreport -> BugreportTxt

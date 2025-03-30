@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+from python_bugreport_parser.bugreport.dumpsys_entry import (
+    MqsServiceDumpsysEntry,
+    DumpsysEntry,
+)
+
 # Assume these regex patterns are defined similarly to Rust version
 SECTION_END = re.compile(
     r"------ (\d+.\d+)s was the duration of '((.*?)(?: \(.*\))?|for_each_pid\((.*)\))' ------"
@@ -15,6 +20,9 @@ LOGCAT_LINE_REGEX = re.compile(
 )
 DUMPSYS_REGEX = re.compile(
     r"--------- \d\.\d+s was the duration of dumpsys (.*), ending at"
+)
+DUMPSYS_SECTION_DELIMITER = (
+    "-------------------------------------------------------------------------------"
 )
 SYSTEM_PROPERTY_REGEX = re.compile(r"\[([^\]]*)\]: \[([^\]]*)\]", re.DOTALL)
 
@@ -57,14 +65,6 @@ class LogcatLine:
             f"{self.user} {self.pid} {self.tid} {self.level} "
             f"{self.tag}: {self.message}"
         )
-
-
-@dataclass
-class DumpsysEntry:
-    """Represents a single dumpsys entry with service name and collected data"""
-
-    name: str
-    data: str
 
 
 class SectionContent(ABC):
@@ -121,13 +121,26 @@ class DumpsysSection(SectionContent):
 
     def parse(self, lines: List[str], year: int) -> None:
         temp = ""
+        name = ""
         for line in lines:
-            if match := DUMPSYS_REGEX.match(line):
-                # When we find a dumpsys header line, save accumulated data
-                self.entries.append(
-                    DumpsysEntry(name=match.group(1).strip(), data=temp.strip())
-                )
+            if line == DUMPSYS_SECTION_DELIMITER:
+                # When we find a delimiter line, save accumulated data
+                if name == "":
+                    continue
+
+                if name == "miui.mqsas.MQSService":
+                    entry = MqsServiceDumpsysEntry.parse_line(name, temp)
+                else:
+                    entry = DumpsysEntry(name=match.group(1).strip(), data=temp.strip())
+                self.entries.append(entry)
                 temp = ""
+                name = ""
+            elif match := DUMPSYS_REGEX.match(line):
+                name = match.group(1).strip()
+            elif line.startswith("DUMP OF SERVICE "):
+                # We don't need this line, and we get the service name in the previous branch
+                # So just skip it
+                pass
             else:
                 # Accumulate lines between headers
                 temp += line + "\n"
