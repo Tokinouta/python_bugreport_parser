@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
-from .context import python_bugreport_parser
+
 from python_bugreport_parser.bugreport import Metadata
 
 

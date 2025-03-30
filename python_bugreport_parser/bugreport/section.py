@@ -1,9 +1,8 @@
-from typing import List
 import re
-from datetime import datetime, timedelta
-from dataclasses import dataclass
-from typing import List, Optional
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 # Assume these regex patterns are defined similarly to Rust version
 SECTION_END = re.compile(
@@ -82,7 +81,7 @@ class SectionContent(ABC):
 
 class LogcatSection(SectionContent):
     def __init__(self):
-        self.entries = []
+        self.entries: List[LogcatLine] = []
 
     def __len__(self) -> int:
         return len(self.entries)
@@ -120,8 +119,7 @@ class DumpsysSection(SectionContent):
     def __init__(self):
         self.entries: List[DumpsysEntry] = []
 
-    def parse(self, lines: List[str], _year: int) -> None:
-
+    def parse(self, lines: List[str], year: int) -> None:
         temp = ""
         for line in lines:
             if match := DUMPSYS_REGEX.match(line):
@@ -167,7 +165,7 @@ class Section:
 
     def search_by_tag(self, tag: str) -> Optional[List["LogcatLine"]]:
         if isinstance(self.content, LogcatSection):
-            return [line for line in self.content.section.lines if line.tag == tag]
+            return [line for line in self.content.entries if line.tag == tag]
         return None
 
     def search_by_time(self, time_str: str) -> Optional[List["LogcatLine"]]:
@@ -176,7 +174,7 @@ class Section:
             if isinstance(self.content, LogcatSection):
                 return [
                     line
-                    for line in self.content.section.lines
+                    for line in self.content.entries
                     if abs(line.timestamp - target_time).total_seconds() <= 1
                 ]
             return None

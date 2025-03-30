@@ -1,8 +1,7 @@
 import mmap
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from python_bugreport_parser.bugreport.metadata import Metadata
 from python_bugreport_parser.bugreport.section import (
@@ -24,7 +23,7 @@ class BugreportTxt:
         self.sections: List[Section] = []
 
     def _mmap_file(self, path: Path) -> mmap.mmap:
-        with open(path, "r") as f:
+        with open(path, "rb") as f:
             return mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 
     def load(self) -> None:
@@ -69,7 +68,7 @@ class BugreportTxt:
             if not second_occurrence:
                 continue
 
-            prev_line_num, prev_content = matches[idx - 1]
+            prev_line_num, _ = matches[idx - 1]
             start_line = prev_line_num
             end_line = line_num
 

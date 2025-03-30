@@ -1,19 +1,19 @@
+import time
 import unittest
 import zipfile
-from pathlib import Path
 from datetime import datetime
-import time
+from pathlib import Path
 
-from .context import python_bugreport_parser
+# Actually, this was introduced from a blog, but it seems to have no effect
+# keep it commented out in case it becomes necessary
+# from .context import python_bugreport_parser
 from python_bugreport_parser.bugreport import (
     BugreportTxt,
-    Metadata,
-    Section,
     DumpsysSection,
     LogcatSection,
-    SystemPropertySection,
     OtherSection,
-)  # Import your actual classes
+    SystemPropertySection,
+)
 
 
 class TestBugreport(unittest.TestCase):

@@ -35,7 +35,7 @@ class Bugreport:
         bugreport_dirs = Bugreport.extract(
             feedback_id=feedback_id,
             bugreport_zip_path=bugreport_zip_path,
-            extract_path=extract_path,
+            bugreport_extract_path=extract_path,
         )
         bugreport.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
         bugreport.bugreport_txt.load()
@@ -43,7 +43,7 @@ class Bugreport:
 
     @classmethod
     def extract(
-        cls, feedback_id, bugreport_zip_path: Path, extract_path: Path
+        cls, feedback_id, bugreport_zip_path: Path, bugreport_extract_path: Path
     ) -> BugreportDirs:
         """
         Extracts the bugreport zip file and organizes its contents into directories.
@@ -61,11 +61,11 @@ class Bugreport:
                 with zipfile.ZipFile(zip_file, "r") as zip_ref:
                     zip_ref.extractall(unzip_dir)
                 os.remove(zip_file)
-            except Exception as e:
-                print(e)
+            except (zipfile.BadZipFile, PermissionError, FileNotFoundError) as e:
+                print(f"Error processing {zip_file}: {e}")
 
         # Create feedback directory if it doesn't exist
-        feedback_dir = extract_path / str(feedback_id)
+        feedback_dir = bugreport_extract_path / str(feedback_id)
         os.makedirs(feedback_dir, exist_ok=True)
 
         # Extract and remove the initial bugreport zip

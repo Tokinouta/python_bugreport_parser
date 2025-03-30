@@ -6,6 +6,7 @@ from typing import Iterator, Optional
 UPTIME_REGEX = re.compile(r"up (\d+) weeks?, (\d+) days?, (\d+) hours?, (\d+) minutes?")
 VERSION_REGEX = re.compile(r"Build fingerprint: '(.*)/(.*)/(.*)/(.*)/(.*):(.*)/(.*)'")
 
+
 class Metadata:
     def __init__(self):
         self.timestamp: datetime = datetime.now()
@@ -20,7 +21,7 @@ class Metadata:
             line = self.advance_line(lines_iter)
             if line is None:
                 break
-            
+
             if line.startswith("== dumpstate: "):
                 self.timestamp = self.parse_timestamp(line)
             elif line.startswith("Build fingerprint:"):
@@ -70,5 +71,5 @@ class Metadata:
 
         total_days = weeks * 7 + days
         total_seconds = hours * 3600 + minutes * 60
-        
+
         return timedelta(days=total_days, seconds=total_seconds)

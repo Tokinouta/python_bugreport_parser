@@ -5,7 +5,7 @@ import zipfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import python_bugreport_parser
+import python_bugreport_parser  # pylint: disable=W0611,C0143
 from python_bugreport_parser.bugreport import BugreportTxt
 
 

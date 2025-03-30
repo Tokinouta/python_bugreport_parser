@@ -1,17 +1,16 @@
+import unittest
+import zipfile
 from datetime import datetime
 from pathlib import Path
-import unittest
-from unittest.mock import Mock
-import zipfile
 
-from .context import python_bugreport_parser, TEST_BUGREPORT_TXT
-from python_bugreport_parser.bugreport.section import LogcatLine, Section
-from python_bugreport_parser.bugreport import BugreportTxt
-from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
+from python_bugreport_parser.bugreport.section import LogcatLine
 from python_bugreport_parser.plugins.input_focus_plugin import (
-    InputFocusPlugin,
     INPUT_FOCUS_REQUEST,
+    InputFocusPlugin,
 )
+from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
+
+from .context import TEST_BUGREPORT_TXT
 
 
 class TestTimestampPlugin(unittest.TestCase):

@@ -1,6 +1,5 @@
 import unittest
 from datetime import datetime
-from .context import python_bugreport_parser
 from python_bugreport_parser.bugreport import (
     LogcatSection,
     LogcatLine,
