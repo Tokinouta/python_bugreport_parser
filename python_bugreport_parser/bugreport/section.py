@@ -129,7 +129,7 @@ class DumpsysSection(SectionContent):
                     continue
 
                 if name == "miui.mqsas.MQSService":
-                    entry = MqsServiceDumpsysEntry.parse_line(name, temp)
+                    entry = MqsServiceDumpsysEntry.parse_line(name, temp.strip())
                 else:
                     entry = DumpsysEntry(name=match.group(1).strip(), data=temp.strip())
                 self.entries.append(entry)

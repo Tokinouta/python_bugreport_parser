@@ -28,9 +28,16 @@ class TestMqsServiceDumpsysEntry(unittest.TestCase):
         )
 
         results = mqs_dumpsys.boot_records
-        self.assertEqual(len(results), 48)
+        self.assertEqual(len(results), 50) # 48 reboots + 1 XVDD + 1 ANR
+
+        # TODO: verify the three records with details, 1 kpanic, 1 xvdd, 1 anr
 
         # Verify all results have correct level
-        for entry in results:
-            print(entry)
+        # for entry in results:
+        #     print(entry)
+            # if (
+            #     abs(entry.timestamp - datetime(2024, 7, 28, 13, 12, 32)).total_seconds()
+            #     < 5
+            # ):
+            #     print(entry)
             # self.assertEqual(entry.level, "D")

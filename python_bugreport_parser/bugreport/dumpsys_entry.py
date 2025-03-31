@@ -8,8 +8,9 @@ REBOOT_RECORD_START = "---------- kernel abnormal reboot records ----------"
 REBOOT_FRAMEWORK_START = "---------- VM reboot records ----------"
 REBOOT_KERNEL_START = "---------- kernel reboot records ----------"
 HANG_RECORD_START = "--------- System hang records ---------"
-REBOOT_DETAIL_START = "----------- dgt and det match ---------"
-BEGIN_OF_NEXT_SECTION = re.compile(r"-+ ?(\w+)( \w+)*-+")
+# REBOOT_DETAIL_START = "----------- dgt and det match ---------"
+REBOOT_DETAIL_START = "--------dgt and det match--------"
+BEGIN_OF_NEXT_SECTION = re.compile(r"-+ ?(\w+)( \w+)* ?-+")
 
 
 @dataclass
@@ -24,16 +25,37 @@ class DumpsysEntry:
 class LocalRebootRecord:
 
     def __init__(self):
-        self.miui_version = ""
-        self.timestamp = ""
-        self.dgt = ""
-        self.detail = ""
-        self.process = ""
-        self.type = ""
-        self.current_miui_version = ""
-        self.sum = ""
+        self.miui_version: str = ""
+        self.timestamp: datetime = None
+        self.dgt: str = ""
+        self.detail: str = ""
+        self.process: str = ""
+        self.type: str = ""
+        self.current_miui_version: str = ""
+        self.sum: str = ""
         self.is_kernel_reboot = False
-        self.boot_reason = ""
+        self.boot_reason: str = ""
+
+    def merge_records(self, that: "LocalRebootRecord"):
+        self.miui_version = (
+            self.miui_version if len(self.miui_version) > 0 else that.miui_version
+        )
+        self.timestamp = (
+            self.timestamp if self.timestamp is not None else that.timestamp
+        )
+        self.dgt = self.dgt if len(self.dgt) > 0 else that.dgt
+        self.detail = self.detail if len(self.detail) > 0 else that.detail
+        self.process = self.process if len(self.process) > 0 else that.process
+        self.type = self.type if len(self.type) > 0 else that.type
+        self.current_miui_version = (
+            self.current_miui_version
+            if len(self.current_miui_version) > 0
+            else that.current_miui_version
+        )
+        self.sum = self.sum if len(self.sum) > 0 else that.sum
+        self.boot_reason = (
+            self.boot_reason if len(self.boot_reason) > 0 else that.boot_reason
+        )
 
     def isOk(self):
         return (
@@ -88,6 +110,9 @@ class LocalRebootRecord:
         # TODO: HALF_Watchdog
         return "Watchdog" == self.type
 
+    def is_same_time(self, other: "LocalRebootRecord"):
+        return self.timestamp == other.timestamp
+
     def __str__(self):
         return (
             f"本地重启记录:\n"
@@ -139,40 +164,20 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         result.boot_records.extend(entries)
         print(lines[current_line_index])
 
-        # parse kernel reboot records
-        current_line_index = skip_to_next_section(
-            lines, REBOOT_KERNEL_START, current_line_index
-        )
-        current_line_index = MqsServiceDumpsysEntry.parse_reboot_records(
-            lines, current_line_index, result
-        )
-
-        # parse framework reboot records
-        current_line_index = skip_to_next_section(
-            lines, REBOOT_FRAMEWORK_START, current_line_index
-        )
-        current_line_index = MqsServiceDumpsysEntry.parse_reboot_records(
-            lines, current_line_index, result
-        )
-
         # TODO: we also need to parse the hang records, but we need to have a new
         #       data structure for that. These records are for ANRs, and now we
         #       just focus on the reboots.
+        # Now we can store the HANGs into LocalRebootRecord as a temporary solution
 
-        # parse detail records
-        current_line_index = skip_to_next_section(
-            lines, REBOOT_DETAIL_START, current_line_index
-        )
-        current_line_index = MqsServiceDumpsysEntry.parse_reboot_records(
-            lines, current_line_index, result
-        )
-        # new_start = start
-        # if new_start == start:
-        #     # Failure, jump to the next line
-        #     start += 1
-        # else:
-        #     # Success, jump over {count} lines
-        #     start = new_start
+        while current_line_index < len(lines):
+            new_start = MqsServiceDumpsysEntry.parse_reboot_record(
+                lines, current_line_index, result.boot_records
+            )
+            # Failure
+            if new_start == current_line_index:
+                break
+            current_line_index = new_start
+
         return result
 
     @staticmethod
@@ -204,12 +209,15 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
     def parse_reboot_record(
         lines: List[str], current_line_index: int, results: List[LocalRebootRecord]
     ):
+        # print(f"Parsing next section: {current_line_index}, {lines[current_line_index]}")
         current = current_line_index
         arecord = LocalRebootRecord()
+        record_modified = False
         record_end_line = "------------------------------------"
         while current < len(lines):
             line = lines[current]
             current += 1
+            print(line)
             # if BEGIN_OF_NEXT_SECTION.match(line):
             #     break
 
@@ -217,56 +225,36 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
                 print("----------------section end--------------------")
                 break
 
+            record_modified = True
             if (key := "record time      :") and line.startswith(key):
-                print(line)
-                arecord.timestamp = line[len(key) :]
-                # current += 1
+                arecord.timestamp = datetime.strptime(
+                    line[len(key) :], "%Y-%m-%d %H:%M:%S"
+                )
                 continue
             elif (key := "vm reboot        :") and line.startswith(key):
-                print(line)
                 arecord.type = line[len(key) :]
-                # current += 1
                 continue
             elif (key := "kernelreboot     :") and line.startswith(key):
-                print(line)
-                # current += 1
                 arecord.set_kernel_reboot(line[len(key) :])
                 continue
             elif (key := "miui version     :") and line.startswith(key):
-                print(line)
                 arecord.miui_version = line[len(key) :]
-                # current += 1
                 continue
             elif (key := "os version     :") and line.startswith(key):
-                print(line)
                 arecord.miui_version = line[len(key) :]
-                # current += 1
                 continue
             elif (key := "process          :") and line.startswith(key):
-                print(line)
                 arecord.process = line[len(key) :]
-                # current += 1
                 continue
             elif (key := "dgt              :") and line.startswith(key):
                 arecord.dgt = line[len(key) :]
-                print("Found new dgt: " + arecord.dgt)
-                # current += 1
                 continue
             elif (key := "sum              :") and line.startswith(key):
-                print(line)
                 arecord.sum = line[len(key) :]
-                # current += 1
                 continue
             elif (key := "zygotepid        :") and line.startswith(key):
-                print(line)
-                # current += 1
                 continue
             elif (key := "det              :") and line.startswith(key):
-                print("Paring backtrace for dgt " + arecord.dgt)
-                # current += 1
-                # arecord.detail, current = BugreportParser.parse_backtrace(
-                #     lines, current
-                # )
                 details = ""
                 while current < len(lines):
                     line = lines[current]
@@ -277,58 +265,21 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
                         break
 
                     details += line + "\n"
-
+                arecord.detail = details
                 break  # det is always at the last, so break the loop now
 
-            # Unknown token or no more keys
-            # if (line in BugreportParser.reboot_detail_section_head) or (
-            #     line in BugreportParser.hang_secion_head
-            # ):
-            #     print("section reboot records ended: " + line)
-            # else:
-            #     logw("parse_reboot_record: unexpected token: '" + line + "'")
-            # arecord = None
-            # break
-
-        results.append(arecord)
-
-        return current
-
-    @staticmethod
-    def parse_reboot_records(
-        lines: List[str], current_line_index: int, results: List[LocalRebootRecord]
-    ):
-        current = current_line_index
-        while current < len(lines):
-            if BEGIN_OF_NEXT_SECTION.match(lines[current]):
-                break
-            new_start = MqsServiceDumpsysEntry.parse_reboot_record(
-                lines, current, results
-            )
-            # Failure
-            if new_start == current:
-                break
-            current = new_start
+        # find the one with the same timestamp
+        if record_modified:
+            for i, record in enumerate(results):
+                # print(record.timestamp, arecord.timestamp)
+                if (
+                    abs(record.timestamp - arecord.timestamp).total_seconds() < 5
+                    or record.dgt == arecord.dgt
+                ):
+                    print("Found existing record with the same timestamp")
+                    results[i].merge_records(arecord)
+                    break
+            else:
+                results.append(arecord)
 
         return current
-
-    # @staticmethod
-    # def parse_backtrace(lines, start):
-    #     idx = start
-    #     details = ""
-    #     section_end = "------------------------------------"
-    #     mqs_dump_section_end = "was the duration of dumpsys miui.mqsas.MQSService"
-    #     while idx < len(lines):
-    #         line = lines[idx]
-    #         idx += 1
-    #         if line == section_end:
-    #             print("----------------backtrace section end--------------------")
-    #             break
-
-    #         if mqs_dump_section_end in line:
-    #             print(line)
-    #             break
-
-    #         print(line)
-    #         details += line + "\n"
-    #     return details, idx
