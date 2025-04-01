@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
-# REBOOT_RECORD_START = "---------- Abnormal reboot records ----------"
-REBOOT_RECORD_START = "---------- kernel abnormal reboot records ----------"
+REBOOT_RECORD_START = "---------- Abnormal reboot records ----------"
+# REBOOT_RECORD_START = "---------- kernel abnormal reboot records ----------"
 REBOOT_FRAMEWORK_START = "---------- VM reboot records ----------"
 REBOOT_KERNEL_START = "---------- kernel reboot records ----------"
 HANG_RECORD_START = "--------- System hang records ---------"
@@ -70,6 +70,9 @@ class LocalRebootRecord:
     def idDgtValid(self):
         return len("721e786f2f18e400c95d6abc19d0c676") == len(self.dgt)
 
+    def is_vanilla(self) -> bool:
+        return self.boot_reason in {"long_power_key", "reboot", "reboot,userrequested"}
+
     def set_kernel_reboot(self, powerup_reason):
         self.is_kernel_reboot = True
         self.type = powerup_reason
@@ -133,7 +136,7 @@ class LocalRebootRecord:
 class MqsServiceDumpsysEntry(DumpsysEntry):
     """Represents a single dumpsys entry with service name and collected data"""
 
-    boot_records: List[str] = field(default_factory=list)
+    boot_records: List[LocalRebootRecord] = field(default_factory=list)
 
     @classmethod
     def parse_line(
@@ -162,7 +165,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
             lines[current_line_index:], current_line_index
         )
         result.boot_records.extend(entries)
-        print(lines[current_line_index])
+        # print(lines[current_line_index])
 
         # TODO: we also need to parse the hang records, but we need to have a new
         #       data structure for that. These records are for ANRs, and now we
@@ -181,7 +184,9 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         return result
 
     @staticmethod
-    def parse_reboot_entries(lines: List[str], current_line_index: int):
+    def parse_reboot_entries(
+        lines: List[str], current_line_index: int
+    ) -> LocalRebootRecord:
         result = []
         temp_record = LocalRebootRecord()
         for line in lines:
@@ -217,12 +222,12 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         while current < len(lines):
             line = lines[current]
             current += 1
-            print(line)
+            # print(line)
             # if BEGIN_OF_NEXT_SECTION.match(line):
             #     break
 
             if line == record_end_line:
-                print("----------------section end--------------------")
+                # print("----------------section end--------------------")
                 break
 
             record_modified = True
@@ -258,7 +263,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
                 details = ""
                 while current < len(lines):
                     line = lines[current]
-                    print(line)
+                    # print(line)
                     current += 1
 
                     if line == record_end_line:
@@ -276,7 +281,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
                     abs(record.timestamp - arecord.timestamp).total_seconds() < 5
                     or record.dgt == arecord.dgt
                 ):
-                    print("Found existing record with the same timestamp")
+                    # print("Found existing record with the same timestamp")
                     results[i].merge_records(arecord)
                     break
             else:

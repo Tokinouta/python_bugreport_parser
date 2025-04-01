@@ -15,6 +15,14 @@ class Metadata:
         self.uptime: timedelta = timedelta()
         self.lines_passed: int = 0
 
+    def __str__(self):
+        return (
+            f"Timestamp: {self.timestamp}\n"
+            f"Version: {self.version}\n"
+            f"Product: {self.product}\n"
+            f"Uptime: {self.uptime}\n"
+        )
+
     def parse(self, lines: Iterator[str]) -> None:
         """Parse metadata from bugreport lines"""
         lines_iter = iter(lines)

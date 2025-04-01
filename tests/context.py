@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 import sys
 import os
@@ -26,6 +27,7 @@ def setup_bugreport_txt():
 
     bugreport = BugreportTxt(example_txt)
     bugreport.load()
+    bugreport.set_error_timestamp(datetime(2024, 7, 28, 13, 15, 0))
     return bugreport
 
 

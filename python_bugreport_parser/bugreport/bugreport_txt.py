@@ -21,6 +21,8 @@ class BugreportTxt:
         self.raw_file = self._mmap_file(path)
         self.metadata = Metadata()
         self.sections: List[Section] = []
+        self.error_timestamp: datetime = None
+        self.loaded: bool = False
 
     def _mmap_file(self, path: Path) -> mmap.mmap:
         with open(path, "rb") as f:
@@ -29,6 +31,7 @@ class BugreportTxt:
     def load(self) -> None:
         matches = self.read_and_slice()
         self.pair_sections(matches)
+        self.loaded = True
 
     def read_and_slice(self) -> List[Tuple[int, str]]:
         lines = self._read_file()
@@ -122,3 +125,12 @@ class BugreportTxt:
         # splitlines() is not used since there are other characters that may cause wrong linebreaks
         lines = content.split("\n")
         return lines
+
+    def set_error_timestamp(self, error_timestamp: datetime) -> None:
+        """
+        Set the error timestamp.
+
+        Args:
+            error_timestamp (datetime): The error timestamp to set.
+        """
+        self.error_timestamp = error_timestamp

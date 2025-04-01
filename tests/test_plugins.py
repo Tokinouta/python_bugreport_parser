@@ -9,6 +9,9 @@ from python_bugreport_parser.plugins.input_focus_plugin import (
     InputFocusPlugin,
 )
 from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
+from python_bugreport_parser.plugins.invalid_bugreport_plugin import (
+    InvalidBugreportPlugin,
+)
 
 from .context import TEST_BUGREPORT_TXT
 
@@ -99,3 +102,17 @@ class TestInputFocusPlugin(unittest.TestCase):
                 continue
             self.assertIn(request_activity, result.leaving.message)
             # self.assertGreaterEqual(result.leaving.timestamp, result.entering.timestamp)
+
+
+class TestInvalidBugreportPlugin(unittest.TestCase):
+    def setUp(self):
+        self.bugreport = TEST_BUGREPORT_TXT
+        self.plugin = InvalidBugreportPlugin()
+
+    def test_invalid_bugreport_plugin(self):
+        # Simulate an invalid bugreport
+        # self.bugreport.metadata.timestamp = None
+        self.plugin.analyze(self.bugreport)
+
+        # Check if the plugin correctly identifies the invalid bugreport
+        self.assertFalse(self.plugin.is_invalid)
