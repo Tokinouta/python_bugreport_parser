@@ -1,7 +1,10 @@
 import re
-from dataclasses import dataclass
-from typing import List, Optional
-from python_bugreport_parser.bugreport import BugreportTxt, LogcatLine, LogcatSection
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from python_bugreport_parser.bugreport import BugreportTxt, LogcatSection
 from python_bugreport_parser.plugins import BasePlugin
 
 # Regex patterns for input focus events
@@ -12,11 +15,76 @@ INPUT_FOCUS_LEAVING = re.compile(r"\[Focus leaving ([\w /\.]+)( \(server\))?,.*\
 
 
 @dataclass
+class FocusEvent:
+    event_type: str  # 'request', 'receive', 'entering', 'leaving'
+    focus_id: str
+    component: str
+    reason: str
+    server: bool
+    timestamp: datetime
+
+    @staticmethod
+    def parse_log_line(line: str, timestamp: datetime) -> Optional["FocusEvent"]:
+        """Parse a log line to extract focus event details."""
+        pattern = re.compile(
+            r"^\[Focus (\w+)\s*:?\s*([^ ]+)(?: (.*?))?(?: \((server)\))?,reason=(.*?)\]$"
+        )
+        match = pattern.match(line.strip())
+        if not match:
+            return None
+
+        event_type, focus_id, component, server_flag, reason = match.groups()
+        server = server_flag == "server"
+
+        # Clean up special focus IDs
+        focus_id = focus_id.replace(":", "")  # Handle cases like ":<null>"
+        component = component or focus_id  # Handle case where component is missing
+        if component == "(server)":
+            component = focus_id
+        component.replace(" (server)", "").strip()
+
+        return FocusEvent(
+            event_type=event_type.lower(),
+            focus_id=focus_id,
+            component=component,
+            reason=reason,
+            server=server,
+            timestamp=timestamp,
+        )
+
+    def __str__(self) -> str:
+        return f"{self.timestamp} - {self.event_type} - {self.focus_id} - {self.component} - {self.reason} - {self.server}"
+
+
+@dataclass
 class InputFocusTuple:
-    request: Optional[LogcatLine] = None
-    receive: Optional[LogcatLine] = None
-    entering: Optional[LogcatLine] = None
-    leaving: Optional[LogcatLine] = None
+    request: Optional[FocusEvent] = None
+    receive: Optional[FocusEvent] = None
+    entering: Optional[FocusEvent] = None
+    leaving: Optional[FocusEvent] = None
+    latest_timestamp: datetime = field(default=datetime.min)
+    event_count: int = field(default=0)
+
+    def can_accept(self, event: FocusEvent) -> bool:
+        """Check if event can be added to this tuple"""
+        if getattr(self, event.event_type) is not None:
+            return False
+        return event.timestamp >= self.latest_timestamp
+
+    def add_event(self, event: FocusEvent):
+        setattr(self, event.event_type, event)
+        if event.timestamp > self.latest_timestamp:
+            self.latest_timestamp = event.timestamp
+        self.event_count += 1
+
+    def __str__(self):
+        return (
+            f"InputFocusTuple(\n"
+            f"request={self.request}\n"
+            f"receive={self.receive}\n"
+            f"entering={self.entering}\n"
+            f"leaving={self.leaving})"
+        )
 
 
 class InputFocusPlugin(BasePlugin):
@@ -35,66 +103,55 @@ class InputFocusPlugin(BasePlugin):
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
         if not event_log:
             raise ValueError("EVENT LOG section not found")
+        else:
+            event_log: LogcatSection = event_log.content
+        focus_logs = event_log.search_by_tag("input_focus") or []
 
-        self._pair_input_focus(event_log.content)
+        events = []
+        for line in [line for line in focus_logs if line.message.startswith("[Focus")]:
+            event = FocusEvent.parse_log_line(line.message, line.timestamp)
+            if event:
+                events.append(event)
+
+        # Group events into focus tuples
+        self.records = InputFocusPlugin._group_focus_events(events)
 
     def report(self) -> str:
-        return self.result
+        return "\n".join(str(record) for record in self.records)
 
-    def _pair_input_focus(self, section: LogcatSection) -> None:
-        """Process input focus events in section"""
-        focus_logs = section.search_by_tag("input_focus") or []
+    @staticmethod
+    def _group_focus_events(events: List[FocusEvent]) -> List[InputFocusTuple]:
+        focus_map: Dict[str, List[InputFocusTuple]] = defaultdict(list)
+        all_tuples: List[InputFocusTuple] = []
 
-        # Find all focus requests
-        requests = [
-            (idx, line)
-            for idx, line in enumerate(focus_logs)
-            if "Focus request" in line.message
-        ]
+        for event in events:
+            if event.focus_id.lower() == "<null>":
+                ft = InputFocusTuple()
+                ft.add_event(event)
+                all_tuples.append(ft)
+                continue
 
-        for req_idx, req_line in requests:
-            window = self._extract_window(req_line.message)
-            self.result += f"window: {window}\n"
+            candidates = []
+            for ft in reversed(focus_map.get(event.focus_id, [])):
+                if ft.can_accept(event):
+                    candidates.append(ft)
 
-            current_tuple = InputFocusTuple(request=req_line)
+            if candidates:
+                # Select best candidate: most complete, then most recent
+                best = max(
+                    candidates, key=lambda x: (x.event_count, x.latest_timestamp)
+                )
+                best.add_event(event)
+            else:
+                # Create new tuple
+                new_ft = InputFocusTuple()
+                new_ft.add_event(event)
+                focus_map[event.focus_id].append(new_ft)
+                all_tuples.append(new_ft)
 
-            # Search subsequent logs for related events
-            for line in focus_logs[req_idx + 1 :]:
-                if not current_tuple.receive:
-                    current_tuple.receive = self._match_receive(line, window)
+        sorted_completed = sorted(
+            all_tuples,
+            key=lambda x: x.request.timestamp if x.request else datetime.min,
+        )
 
-                if not current_tuple.entering:
-                    current_tuple.entering = self._match_entering(line, window)
-
-                if not current_tuple.leaving:
-                    current_tuple.leaving = self._match_leaving(line, window)
-
-                if all(
-                    [
-                        current_tuple.receive,
-                        current_tuple.entering,
-                        current_tuple.leaving,
-                    ]
-                ):
-                    break
-
-            self.records.append(current_tuple)
-
-        # print(f"Processed {len(self.records)} input focus records")
-
-    def _extract_window(self, message: str) -> str:
-        """Extract window name from focus request"""
-        match = INPUT_FOCUS_REQUEST.search(message)
-        return match.group(1) if match else ""
-
-    def _match_receive(self, line: LogcatLine, window: str) -> Optional[LogcatLine]:
-        match = INPUT_FOCUS_RECEIVE.search(line.message)
-        return line if match and match.group(1) == window else None
-
-    def _match_entering(self, line: LogcatLine, window: str) -> Optional[LogcatLine]:
-        match = INPUT_FOCUS_ENTERING.search(line.message)
-        return line if match and match.group(1) == window else None
-
-    def _match_leaving(self, line: LogcatLine, window: str) -> Optional[LogcatLine]:
-        match = INPUT_FOCUS_LEAVING.search(line.message)
-        return line if match and match.group(1) == window else None
+        return sorted_completed

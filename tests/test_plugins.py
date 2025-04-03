@@ -5,8 +5,10 @@ from pathlib import Path
 
 from python_bugreport_parser.bugreport.section import LogcatLine
 from python_bugreport_parser.plugins.input_focus_plugin import (
-    INPUT_FOCUS_REQUEST,
     InputFocusPlugin,
+)
+from python_bugreport_parser.plugins.last_user_activity_plugin import (
+    LastUserActivityPlugin,
 )
 from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
 from python_bugreport_parser.plugins.invalid_bugreport_plugin import (
@@ -14,6 +16,7 @@ from python_bugreport_parser.plugins.invalid_bugreport_plugin import (
 )
 
 from .context import TEST_BUGREPORT_TXT
+from functools import reduce
 
 
 class TestTimestampPlugin(unittest.TestCase):
@@ -54,16 +57,6 @@ class TestInputFocusPlugin(unittest.TestCase):
         self.bugreport = TEST_BUGREPORT_TXT
 
         self.plugin = InputFocusPlugin()
-        # self.mock_section = Mock(spec=Section)
-        # self.mock_section.name = "EVENT LOG"
-
-        # # Setup test log lines
-        # self.logs = [
-        #     self._create_log_line("Focus request com.example.Activity,reason=TOUCH"),
-        #     self._create_log_line("Focus receive :com.example.Activity"),
-        #     self._create_log_line("Focus entering com.example.Activity"),
-        #     self._create_log_line("Focus leaving com.example.Activity"),
-        # ]
 
     def _create_log_line(self, message: str) -> LogcatLine:
         return LogcatLine(
@@ -81,27 +74,34 @@ class TestInputFocusPlugin(unittest.TestCase):
             (s for s in self.bugreport.sections if s.name == "EVENT LOG"), None
         )
         self.plugin.analyze(self.bugreport)
-        results = self.plugin.records
+        results = self.plugin.report()
 
-        for result in results:
-            match = INPUT_FOCUS_REQUEST.search(result.request.message)
-            request_activity = match.group(1)
-            self.assertIsNotNone(request_activity)
-
-            if result.receive is None:
-                continue
-            self.assertIn(request_activity, result.receive.message)
-            self.assertGreaterEqual(result.receive.timestamp, result.request.timestamp)
-
-            if result.entering is None:
-                continue
-            self.assertIn(request_activity, result.entering.message)
-            self.assertGreaterEqual(result.entering.timestamp, result.receive.timestamp)
-
-            if result.leaving is None:
-                continue
-            self.assertIn(request_activity, result.leaving.message)
-            # self.assertGreaterEqual(result.leaving.timestamp, result.entering.timestamp)
+        for result in self.plugin.records:
+            print(result)
+            events = []
+            if result.request is not None:
+                events.append(result.request)
+            if result.receive is not None:
+                events.append(result.receive)
+            if result.entering is not None:
+                events.append(result.entering)
+            if result.leaving is not None:
+                events.append(result.leaving)
+            # Check if all events have the same focus_id
+            focus_ids = {event.focus_id for event in events}
+            self.assertEqual(
+                len(focus_ids), 1, "All events should have the same focus_id"
+            )
+            # Check if the timestamps are in the correct order
+            timestamps = [event.timestamp for event in events]
+            self.assertTrue(
+                reduce(
+                    lambda x, y: x and y[0] <= y[1],
+                    zip(timestamps, timestamps[1:]),
+                    True,
+                ),
+                "Timestamps are not in the correct order",
+            )
 
 
 class TestInvalidBugreportPlugin(unittest.TestCase):
@@ -111,8 +111,21 @@ class TestInvalidBugreportPlugin(unittest.TestCase):
 
     def test_invalid_bugreport_plugin(self):
         # Simulate an invalid bugreport
-        # self.bugreport.metadata.timestamp = None
         self.plugin.analyze(self.bugreport)
 
         # Check if the plugin correctly identifies the invalid bugreport
         self.assertFalse(self.plugin.is_invalid)
+
+
+class TestLastUserActivityPlugin(unittest.TestCase):
+    def setUp(self):
+        self.bugreport = TEST_BUGREPORT_TXT
+        self.plugin = LastUserActivityPlugin()
+
+    def test_last_user_activity_plugin(self):
+        # Simulate an invalid bugreport
+        # self.bugreport.metadata.timestamp = None
+        self.plugin.analyze(self.bugreport)
+
+        # Check if the plugin correctly identifies the invalid bugreport
+        print(self.plugin.report())
