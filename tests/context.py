@@ -8,6 +8,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import python_bugreport_parser  # pylint: disable=W0611,C0143
 from python_bugreport_parser.bugreport import BugreportTxt
+from python_bugreport_parser.bugreport import dumpsys_entry
+
+dumpsys_entry.REBOOT_RECORD_START = (
+    "---------- kernel abnormal reboot records ----------"
+)
 
 
 # Setup that runs once before all tests
