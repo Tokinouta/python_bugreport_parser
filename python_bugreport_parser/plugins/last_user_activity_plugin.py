@@ -5,6 +5,7 @@ from typing import List, Tuple
 
 from python_bugreport_parser.bugreport import BugreportTxt
 from python_bugreport_parser.bugreport.section import LogcatSection
+from python_bugreport_parser.plugins import BugreportAnalysisContext
 from python_bugreport_parser.plugins.input_focus_plugin import InputFocusPlugin
 
 
@@ -67,8 +68,9 @@ class LastUserActivityPlugin(InputFocusPlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, bugreport: BugreportTxt) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         """Extract timestamp from bugreport metadata"""
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
         if not event_log:
             # call the parent class analyze method

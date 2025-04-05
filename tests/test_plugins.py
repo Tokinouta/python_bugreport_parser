@@ -1,34 +1,25 @@
 import unittest
-import zipfile
 from datetime import datetime
-from pathlib import Path
+from functools import reduce
 
 from python_bugreport_parser.bugreport.section import LogcatLine
-from python_bugreport_parser.plugins.input_focus_plugin import (
-    InputFocusPlugin,
+from python_bugreport_parser.plugins.input_focus_plugin import InputFocusPlugin
+from python_bugreport_parser.plugins.invalid_bugreport_plugin import (
+    InvalidBugreportPlugin,
 )
 from python_bugreport_parser.plugins.last_user_activity_plugin import (
     LastUserActivityPlugin,
 )
 from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
-from python_bugreport_parser.plugins.invalid_bugreport_plugin import (
-    InvalidBugreportPlugin,
-)
 
-from .context import TEST_BUGREPORT_TXT
-from functools import reduce
+from .context import TEST_BUGREPORT_ANALYSIS_CONTEXT
 
 
 class TestTimestampPlugin(unittest.TestCase):
-    def setUp(self):
-        # Setup similar to Rust's test_setup_bugreport
-        self.bugreport = TEST_BUGREPORT_TXT
-
     def test_timestamp_plugin(self):
         plugin = TimestampPlugin()
-        plugin.analyze(self.bugreport)
+        plugin.analyze(TEST_BUGREPORT_ANALYSIS_CONTEXT)
 
-        # Expected format: "2024-08-16T10:02:11+08:00"
         expected = "2024-08-16T10:02:11"
         actual = plugin.report()
 
@@ -37,27 +28,6 @@ class TestTimestampPlugin(unittest.TestCase):
 
 
 class TestInputFocusPlugin(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Setup that runs once before all tests
-        cls.test_data_dir = Path("tests/data")
-        cls.example_txt = cls.test_data_dir / "example.txt"
-        cls.example_zip = cls.test_data_dir / "example.zip"
-
-    def setUp(self):
-        # Runs before each test
-        if not self.example_txt.exists():
-            print(f"File '{self.example_txt}' does not exist. Extracting from ZIP...")
-
-            with zipfile.ZipFile(self.example_zip, "r") as zip_ref:
-                zip_ref.extractall(self.test_data_dir)
-
-            print("Extraction complete.")
-
-        self.bugreport = TEST_BUGREPORT_TXT
-
-        self.plugin = InputFocusPlugin()
-
     def _create_log_line(self, message: str) -> LogcatLine:
         return LogcatLine(
             timestamp=datetime.now(),
@@ -70,13 +40,19 @@ class TestInputFocusPlugin(unittest.TestCase):
         )
 
     def test_pair_input_focus(self):
+        plugin = InputFocusPlugin()
         self.event_log = next(
-            (s for s in self.bugreport.sections if s.name == "EVENT LOG"), None
+            (
+                s
+                for s in TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport_txt.sections
+                if s.name == "EVENT LOG"
+            ),
+            None,
         )
-        self.plugin.analyze(self.bugreport)
-        results = self.plugin.report()
+        plugin.analyze(TEST_BUGREPORT_ANALYSIS_CONTEXT)
+        results = plugin.report()
 
-        for result in self.plugin.records:
+        for result in plugin.records:
             print(result)
             events = []
             if result.request is not None:
@@ -105,27 +81,14 @@ class TestInputFocusPlugin(unittest.TestCase):
 
 
 class TestInvalidBugreportPlugin(unittest.TestCase):
-    def setUp(self):
-        self.bugreport = TEST_BUGREPORT_TXT
-        self.plugin = InvalidBugreportPlugin()
-
     def test_invalid_bugreport_plugin(self):
-        # Simulate an invalid bugreport
-        self.plugin.analyze(self.bugreport)
-
-        # Check if the plugin correctly identifies the invalid bugreport
-        self.assertFalse(self.plugin.is_invalid)
+        plugin = InvalidBugreportPlugin()
+        plugin.analyze(TEST_BUGREPORT_ANALYSIS_CONTEXT)
+        self.assertFalse(plugin.is_invalid)
 
 
 class TestLastUserActivityPlugin(unittest.TestCase):
-    def setUp(self):
-        self.bugreport = TEST_BUGREPORT_TXT
-        self.plugin = LastUserActivityPlugin()
-
     def test_last_user_activity_plugin(self):
-        # Simulate an invalid bugreport
-        # self.bugreport.metadata.timestamp = None
-        self.plugin.analyze(self.bugreport)
-
-        # Check if the plugin correctly identifies the invalid bugreport
-        print(self.plugin.report())
+        plugin = LastUserActivityPlugin()
+        plugin.analyze(TEST_BUGREPORT_ANALYSIS_CONTEXT)
+        print(plugin.report())

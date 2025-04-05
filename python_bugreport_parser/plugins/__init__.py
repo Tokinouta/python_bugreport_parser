@@ -6,10 +6,19 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional
 
+from python_bugreport_parser.bugreport.bugreport_all import Bugreport
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 
 logger = logging.getLogger(__name__)
 plugin_dir = Path(__file__).parent
+
+
+class BugreportAnalysisContext:
+    def __init__(self):
+        self.bugreport: Bugreport = None
+
+        # The analysis, not only the reports strings
+        self.results: List[(BasePlugin, str)] = []
 
 
 class BasePlugin(ABC):
@@ -18,7 +27,7 @@ class BasePlugin(ABC):
         pass
 
     @abstractmethod
-    def analyze(self, bugreport: BugreportTxt) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         pass
 
     @abstractmethod
@@ -52,11 +61,11 @@ class PluginRepo:
             return None
 
     @classmethod
-    def analyze_all(cls, bugreport: "BugreportTxt") -> None:
+    def analyze_all(cls, analysis_context: BugreportAnalysisContext) -> None:
         """Run analysis using all plugins"""
         with cls._lock:
             for plugin in cls._plugins:
-                plugin.analyze(bugreport)
+                plugin.analyze(analysis_context)
 
     @classmethod
     def report_all(cls) -> str:
@@ -78,7 +87,9 @@ class PluginRepo:
                     continue
                 try:
                     # Import the module dynamically
-                    module = importlib.import_module(f"python_bugreport_parser.plugins.{module_name}")
+                    module = importlib.import_module(
+                        f"python_bugreport_parser.plugins.{module_name}"
+                    )
 
                     # Find all classes in the module that inherit from BasePlugin
                     for _, plugin_cls in inspect.getmembers(module, inspect.isclass):
@@ -92,7 +103,9 @@ class PluginRepo:
 
                 except Exception as e:
                     print(f"Failed to load {module_name}: {e}")
-            print(f"Successfully loaded the following plugins: {[plugin.name() for plugin in cls._plugins]}")
+            print(
+                f"Successfully loaded the following plugins: {[plugin.name() for plugin in cls._plugins]}"
+            )
 
 
 PluginRepo.load_plugins()

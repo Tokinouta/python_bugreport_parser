@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from python_bugreport_parser.bugreport import BugreportTxt, LogcatSection
-from python_bugreport_parser.plugins import BasePlugin
+from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext
 
 # Regex patterns for input focus events
 INPUT_FOCUS_REQUEST = re.compile(r"\[Focus request ([\w /\.]+),reason=(\w+)\]")
@@ -98,8 +98,9 @@ class InputFocusPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, bugreport: BugreportTxt) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         """Main analysis entry point"""
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
         if not event_log:
             raise ValueError("EVENT LOG section not found")

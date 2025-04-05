@@ -1,6 +1,6 @@
 from datetime import datetime
 from python_bugreport_parser.bugreport import BugreportTxt
-from python_bugreport_parser.plugins import BasePlugin
+from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext
 
 
 class TimestampPlugin(BasePlugin):
@@ -13,8 +13,9 @@ class TimestampPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, bugreport: BugreportTxt) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         """Extract timestamp from bugreport metadata"""
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         self.timestamp = bugreport.metadata.timestamp
         # print(f"Analyzed timestamps: {self.timestamp}")
 

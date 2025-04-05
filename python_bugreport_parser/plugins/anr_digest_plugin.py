@@ -1,6 +1,7 @@
 from datetime import datetime
+
 from python_bugreport_parser.bugreport import BugreportTxt
-from python_bugreport_parser.plugins import BasePlugin
+from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext
 
 
 class AnrDigestPlugin(BasePlugin):
@@ -13,8 +14,9 @@ class AnrDigestPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, bugreport: BugreportTxt) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         """Extract timestamp from bugreport metadata"""
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         # Extract all am_anr lines
         # Extract 'ANR in' segment and parse it
         # Match each 'ANR in' segment with the am_anr lines
