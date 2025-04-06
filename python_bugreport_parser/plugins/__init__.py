@@ -4,7 +4,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from python_bugreport_parser.bugreport.bugreport_all import Bugreport
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
@@ -13,18 +13,50 @@ logger = logging.getLogger(__name__)
 plugin_dir = Path(__file__).parent
 
 
+class PluginResult:
+    def __init__(
+        self, data: Any, result_type: str = None, metadata: Dict[str, Any] = None
+    ):
+        """
+        A unified result container for plugin outputs.
+        :param data: The actual result produced by the plugin.
+        :param result_type: A string representing the type of data.
+        :param metadata: Optional additional information.
+        """
+        self.data = data
+        self.result_type = result_type
+        self.metadata = metadata or {}
+
+    def __repr__(self):
+        return f"PluginResult(data={self.data}, type={self.result_type})"
+
+
 class BugreportAnalysisContext:
     def __init__(self):
         self.bugreport: Bugreport = None
 
         # The analysis, not only the reports strings
-        self.results: List[(BasePlugin, str)] = []
+        self.results: Dict[PluginResult] = {}
+
+    def set_result(self, plugin_name: str, result: PluginResult):
+        self.results[plugin_name] = result
+
+    def get_result(self, plugin_name: str) -> PluginResult:
+        return self.results.get(plugin_name)
+
+    def __repr__(self):
+        return f"PluginContext(results={self.results})"
 
 
 class BasePlugin(ABC):
-    @abstractmethod
-    def name(self) -> str:
-        pass
+    def __init__(self, name: str, dependencies: List[str] = None):
+        """
+        Base class for plugins.
+        :param name: Unique identifier for the plugin.
+        :param dependencies: List of plugin names that this plugin depends on.
+        """
+        self.name = name
+        self.dependencies = dependencies if dependencies is not None else []
 
     @abstractmethod
     def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
@@ -103,9 +135,44 @@ class PluginRepo:
 
                 except Exception as e:
                     print(f"Failed to load {module_name}: {e}")
+            cls._plugins = PluginRepo.resolve_execution_order(cls._plugins)
             print(
-                f"Successfully loaded the following plugins: {[plugin.name() for plugin in cls._plugins]}"
+                f"Successfully loaded the following plugins: {[plugin.name for plugin in cls._plugins]}"
             )
+
+    @staticmethod
+    def resolve_execution_order(plugins: List[BasePlugin]) -> List[BasePlugin]:
+        """
+        Resolve plugin execution order based on dependencies using a topological sort.
+        Raises an Exception if a circular dependency is detected.
+        """
+        order = []
+        visited = {}
+        plugin_names = [plugin.name for plugin in plugins]
+
+        def dfs(plugin: BasePlugin):
+            if plugin.name in visited:
+                if visited[plugin.name] == "temporary":
+                    raise Exception(f"Circular dependency detected at {plugin.name}")
+                return
+            visited[plugin.name] = "temporary"
+            for dep_name in plugin.dependencies:
+                if dep_name not in plugin_names:
+                    raise Exception(
+                        f"Missing dependency: {dep_name} for plugin {plugin.name}"
+                    )
+                # find the one with the name in the list
+                dep = next(
+                    (p for p in plugins if p.name == dep_name), None
+                )
+                dfs(dep)
+            visited[plugin.name] = "permanent"
+            order.append(plugin)
+
+        for plugin in plugins:
+            if plugin.name not in visited:
+                dfs(plugin)
+        return order
 
 
 PluginRepo.load_plugins()

@@ -15,6 +15,8 @@ from python_bugreport_parser.plugins.timestamp_plugin import TimestampPlugin
 from .context import TEST_BUGREPORT_ANALYSIS_CONTEXT
 
 
+# TODO: Add more tests with substantial content.
+
 class TestTimestampPlugin(unittest.TestCase):
     def test_timestamp_plugin(self):
         plugin = TimestampPlugin()

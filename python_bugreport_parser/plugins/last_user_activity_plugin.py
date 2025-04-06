@@ -5,8 +5,11 @@ from typing import List, Tuple
 
 from python_bugreport_parser.bugreport import BugreportTxt
 from python_bugreport_parser.bugreport.section import LogcatSection
-from python_bugreport_parser.plugins import BugreportAnalysisContext
-from python_bugreport_parser.plugins.input_focus_plugin import InputFocusPlugin
+from python_bugreport_parser.plugins import (
+    BasePlugin,
+    BugreportAnalysisContext,
+    PluginResult,
+)
 
 
 @dataclass
@@ -57,13 +60,11 @@ class InteractionLog:
         )
 
 
-class LastUserActivityPlugin(InputFocusPlugin):
+class LastUserActivityPlugin(BasePlugin):
     def __init__(self):
+        super().__init__(name="LastUserActivityPlugin", dependencies=None)
         self.timestamp = datetime.now()
         self.input_interactions: List[LogcatSection] = []
-
-    def name(self) -> str:
-        return "LastUserActivityPlugin"
 
     def version(self) -> str:
         return "1.0.0"
@@ -90,6 +91,12 @@ class LastUserActivityPlugin(InputFocusPlugin):
                 print(f"Failed to parse line: {line.message}")
 
         # self.input_interactions = input_interactions
+        analysis_context.set_result(
+            self.name,
+            PluginResult(
+                self.input_interactions, metadata={"description": "Interaction Log"}
+            ),
+        )
 
     def report(self) -> str:
         # Bugreport timestamp: 2024-08-16T10:02:11

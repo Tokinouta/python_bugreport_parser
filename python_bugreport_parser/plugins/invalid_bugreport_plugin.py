@@ -2,18 +2,18 @@ from datetime import datetime
 
 from python_bugreport_parser.bugreport import BugreportTxt
 from python_bugreport_parser.bugreport.dumpsys_entry import MqsServiceDumpsysEntry
-from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext
+from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext, PluginResult
 
 
 class InvalidBugreportPlugin(BasePlugin):
     def __init__(self):
+        super().__init__(
+            name="InvalidBugreportPlugin", dependencies=["TimestampPlugin"]
+        )
         self.timestamp = datetime.now()
         self.error_timestamp = datetime.now()
         self.reboot_records = []
         self.is_invalid: bool = False
-
-    def name(self) -> str:
-        return "InvalidBugreportPlugin"
 
     def version(self) -> str:
         return "1.0.0"
@@ -21,7 +21,13 @@ class InvalidBugreportPlugin(BasePlugin):
     def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
         """Extract timestamp from bugreport metadata"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
-        self.timestamp = bugreport.metadata.timestamp
+        # find the result of TimestampPlugin from analysis_context.results
+        result_from_timestamp_plugin = analysis_context.get_result("TimestampPlugin")
+        if result_from_timestamp_plugin is None:
+            print("Result from TimestampPlugin not found")
+            # TODO: return
+        # self.timestamp = bugreport.metadata.timestamp
+        self.timestamp = analysis_context.get_result("TimestampPlugin")
         self.error_timestamp = bugreport.error_timestamp
         print(self.timestamp, self.error_timestamp)
         dumpsys = next((s for s in bugreport.sections if s.name == "DUMPSYS"), None)
@@ -38,6 +44,12 @@ class InvalidBugreportPlugin(BasePlugin):
         ]
         self.is_invalid = len(candidate_records) == 0
         self.reboot_records = candidate_records
+        analysis_context.set_result(
+            self.name,
+            PluginResult(
+                self.reboot_records, metadata={"description": "Reboot records"}
+            ),
+        )
 
     def report(self) -> str:
         # Bugreport timestamp: 2024-08-16T10:02:11

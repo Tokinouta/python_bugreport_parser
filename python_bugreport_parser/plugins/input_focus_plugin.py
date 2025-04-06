@@ -5,7 +5,11 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from python_bugreport_parser.bugreport import BugreportTxt, LogcatSection
-from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext
+from python_bugreport_parser.plugins import (
+    BasePlugin,
+    BugreportAnalysisContext,
+    PluginResult,
+)
 
 # Regex patterns for input focus events
 INPUT_FOCUS_REQUEST = re.compile(r"\[Focus request ([\w /\.]+),reason=(\w+)\]")
@@ -58,6 +62,8 @@ class FocusEvent:
 
 @dataclass
 class InputFocusTuple:
+    focus_id: str = ""
+    component: str = ""
     request: Optional[FocusEvent] = None
     receive: Optional[FocusEvent] = None
     entering: Optional[FocusEvent] = None
@@ -75,6 +81,9 @@ class InputFocusTuple:
         setattr(self, event.event_type, event)
         if event.timestamp > self.latest_timestamp:
             self.latest_timestamp = event.timestamp
+        if not self.focus_id and not self.component:
+            self.focus_id = event.focus_id
+            self.component = event.component
         self.event_count += 1
 
     def __str__(self):
@@ -89,11 +98,9 @@ class InputFocusTuple:
 
 class InputFocusPlugin(BasePlugin):
     def __init__(self):
+        super().__init__(name="InputFocusPlugin", dependencies=None)
         self.records: List[InputFocusTuple] = []
         self.result: str = ""
-
-    def name(self) -> str:
-        return "InputFocusPlugin"
 
     def version(self) -> str:
         return "1.0.0"
@@ -116,6 +123,10 @@ class InputFocusPlugin(BasePlugin):
 
         # Group events into focus tuples
         self.records = InputFocusPlugin._group_focus_events(events)
+        analysis_context.set_result(
+            self.name,
+            PluginResult(self.records, metadata={"description": "InputFocusTuples"}),
+        )
 
     def report(self) -> str:
         return "\n".join(str(record) for record in self.records)
