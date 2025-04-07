@@ -17,9 +17,17 @@ extract_path = Path(config["extract_path"])
 class BugreportDirs:
     def __init__(self):
         self.bugreport_txt = Path()
-        self.anr_files_dir = Path()
-        self.miuilog_reboot_dir: List[Path] = []
-        self.miuilog_scout_dir: List[Path] = []
+        self.anr_files: List[Path] = []
+        self.miuilog_reboot_dirs: List[Path] = []
+        self.miuilog_scout_dirs: List[Path] = []
+
+    def __str__(self):
+        return (
+            f"BugreportDirs(bugreport_txt={self.bugreport_txt}, \n"
+            f"anr_files={self.anr_files}, \n"
+            f"miuilog_reboot_dir={self.miuilog_reboot_dirs}, \n"
+            f"miuilog_scout_dir={self.miuilog_scout_dirs})"
+        )
 
 
 class Bugreport:
@@ -39,6 +47,9 @@ class Bugreport:
         )
         bugreport.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
         bugreport.bugreport_txt.load()
+        bugreport.anr_files = bugreport_dirs.anr_files
+        bugreport.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
+        bugreport.miuilog_scouts = bugreport_dirs.miuilog_scout_dirs
         return bugreport
 
     @classmethod
@@ -101,24 +112,62 @@ class Bugreport:
             bugreport_txt_path = Path(bugreport_txt_path)
             bugreport_dirs.bugreport_txt = bugreport_txt_path
 
+        anr_files_dir = bugreport_dir / "FS" / "data" / "anr"
+        if os.path.isdir(anr_files_dir):
+            os.chdir(anr_files_dir)
+            print(os.getcwd())
+
+            # Unzip all zip files in this folder
+            for file in os.listdir(anr_files_dir):
+                print(file)
+                bugreport_dirs.anr_files.append(anr_files_dir / file)
+        else:
+            print("No anr folder found")
+
         # Check if specific bugreport folder exists
         reboot_mqs_dir = (
             bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "reboot"
         )
 
         if os.path.isdir(reboot_mqs_dir):
-            os.chdir(reboot_mqs_dir)
-            print(os.getcwd())
-
             # Unzip all zip files in this folder
-            for zip_file in glob.glob("*.zip"):
+            for zip_file in glob.glob(str(reboot_mqs_dir / "*.zip")):
                 print(zip_file)
                 extract_dir = os.path.splitext(zip_file)[0]
                 os.makedirs(extract_dir, exist_ok=True)
                 unzip_and_delete(zip_file, extract_dir)
                 print(f"Unzipped {zip_file} to {extract_dir}")
-                bugreport_dirs.miuilog_reboot_dir.append(Path(extract_dir))
+                bugreport_dirs.miuilog_reboot_dirs.append(Path(extract_dir))
         else:
             print("No reboot mqs folder found")
 
+        scout_mqs_dir = (
+            bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "scout"
+        )
+        if os.path.isdir(scout_mqs_dir):
+            # Unzip all zip files in this folder
+            if (scout_app_dir := scout_mqs_dir / "app") and os.path.isdir(
+                scout_app_dir
+            ):
+                for zip_file in os.listdir(scout_app_dir):
+                    print(zip_file)
+                    bugreport_dirs.miuilog_scout_dirs.append(scout_app_dir / zip_file)
+            if (scout_sys_dir := scout_mqs_dir / "sys") and os.path.isdir(
+                scout_sys_dir
+            ):
+                for zip_file in os.listdir(scout_sys_dir):
+                    print(zip_file)
+                    bugreport_dirs.miuilog_scout_dirs.append(scout_sys_dir / zip_file)
+            if (scout_watchdog_dir := scout_mqs_dir / "watchdog") and os.path.isdir(
+                scout_watchdog_dir
+            ):
+                for zip_file in os.listdir(scout_watchdog_dir):
+                    print(zip_file)
+                    bugreport_dirs.miuilog_scout_dirs.append(
+                        scout_watchdog_dir / zip_file
+                    )
+        else:
+            print("No scout mqs folder found")
+
+        print(bugreport_dirs)
         return bugreport_dirs
