@@ -223,10 +223,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
             line = lines[current]
             current += 1
             # print(line)
-            # if BEGIN_OF_NEXT_SECTION.match(line):
-            #     break
-
-            if line == record_end_line:
+            if BEGIN_OF_NEXT_SECTION.match(line) or line == record_end_line:
                 # print("----------------section end--------------------")
                 break
 

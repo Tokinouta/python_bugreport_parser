@@ -133,6 +133,8 @@ class InputFocusPlugin(BasePlugin):
 
     @staticmethod
     def _group_focus_events(events: List[FocusEvent]) -> List[InputFocusTuple]:
+        # TODO: Maybe it's necessary to group by focus_id and component first and then
+        #       group by event type
         focus_map: Dict[str, List[InputFocusTuple]] = defaultdict(list)
         all_tuples: List[InputFocusTuple] = []
 

@@ -13,6 +13,7 @@ class FocusRecentsPlugin(BasePlugin):
     def __init__(self):
         super().__init__(name="FocusRecentsPlugin", dependencies=["InputFocusPlugin"])
         self.possibly_stucked: bool = False
+        self.error_focus_record: InputFocusTuple = None
 
     def version(self) -> str:
         return "1.0.0"
@@ -29,11 +30,11 @@ class FocusRecentsPlugin(BasePlugin):
         else:
             focus_records = analysis_context.get_result("InputFocusPlugin").data
 
-        for record in focus_records:
+        for record in reversed(focus_records):
             if (
                 record.focus_id != "recents_animation_input_consumer"
-                or not record.request
-                or abs(record.request.timestamp < error_timestamp).total_seconds() > 3
+                # or not record.request
+                # or abs(record.request.timestamp - error_timestamp).total_seconds() > 180
             ):
                 continue
 
@@ -47,6 +48,9 @@ class FocusRecentsPlugin(BasePlugin):
                 not_leaving = True
 
             self.possibly_stucked = stay_too_long or not_leaving
+            if self.possibly_stucked:
+                self.error_focus_record = record
+                break
 
         analysis_context.set_result(
             self.name,
@@ -59,6 +63,6 @@ class FocusRecentsPlugin(BasePlugin):
 
     def report(self) -> str:
         if self.possibly_stucked:
-            return f"FocusRecentsPlugin: staying at recents_animation_input_consumer too long or not leaving"
+            return f"FocusRecentsPlugin: staying at recents_animation_input_consumer too long or not leaving\n{self.error_focus_record}"
         else:
-            return f"FocusRecentsPlugin: no issues found"
+            return "FocusRecentsPlugin: no issues found"

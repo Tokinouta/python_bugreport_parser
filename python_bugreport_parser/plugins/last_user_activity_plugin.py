@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Tuple
 
 from python_bugreport_parser.bugreport import BugreportTxt
-from python_bugreport_parser.bugreport.section import LogcatSection
+from python_bugreport_parser.bugreport.section import LogcatLine, LogcatSection
 from python_bugreport_parser.plugins import (
     BasePlugin,
     BugreportAnalysisContext,
@@ -47,16 +47,12 @@ class InteractionLog:
     interaction_id: str
     component: str
     attributes: Attributes
-    gesture_monitor: str
-    pointer_dispatcher: str
 
     def __str__(self):
         return (
             f"InteractionLog(interaction_id={self.interaction_id}, "
             f"component={self.component}, "
             f"attributes={self.attributes}, "
-            f"gesture_monitor={self.gesture_monitor}, "
-            f"pointer_dispatcher={self.pointer_dispatcher})"
         )
 
 
@@ -77,20 +73,12 @@ class LastUserActivityPlugin(BasePlugin):
             # call the parent class analyze method
             return
 
-        # super().analyze(bugreport)
         content: LogcatSection = event_log.content
         input_interactions = content.search_by_tag("input_interaction") or []
         print(
             f"Found {len(input_interactions)} input interactions, {input_interactions[0]}"
         )
-        for line in input_interactions:
-            parsed_line = LastUserActivityPlugin._parse_log_line(line.message)
-            if parsed_line:
-                self.input_interactions.append(parsed_line)
-            else:
-                print(f"Failed to parse line: {line.message}")
-
-        # self.input_interactions = input_interactions
+        self.input_interactions = LastUserActivityPlugin._parse_log(input_interactions)
         analysis_context.set_result(
             self.name,
             PluginResult(
@@ -104,85 +92,78 @@ class LastUserActivityPlugin(BasePlugin):
         return result
 
     @staticmethod
-    def _parse_log_line(line: str):
-        # Main line pattern to extract components
-        line_pattern = re.compile(
-            r"^Interaction with: (\S+) (.*?) \(server\),\s*\{(.*?)\},\s*(.*?),\s*(.*?),?$"
-        )
-        match = line_pattern.match(line.strip())
-        if not match:
-            return None
-
-        (
-            interaction_id,
-            component,
-            attributes_str,
-            gesture_monitor,
-            pointer_dispatcher,
-        ) = match.groups()
-
-        # Parse attributes section
-        attributes = {}
-        for part in LastUserActivityPlugin.split_attributes(attributes_str):
-            key_match = re.match(r"(\w+)(?:=([^=]+)$|\[([^\]]+)\])", part)
-            if key_match:
-                key = key_match.group(1)
-                value = key_match.group(2) or key_match.group(3)
-
-                if key == "flags":
-                    flags = {}
-                    for flag in [f.strip() for f in value.split(", ")]:
-                        if "=" in flag:
-                            k, v = flag.split("=", 1)
-                            flags[k] = v
-                    attributes[key] = flags
-                else:
-                    attributes[key] = value
-
-        return InteractionLog(
-            interaction_id=interaction_id,
-            component=component,
-            attributes=Attributes(
-                touchable_region=LastUserActivityPlugin._parse_touchable_region(
-                    attributes["touchableRegion"]
-                ),
-                visible=attributes["visible"].lower() == "true",
-                trusted_overlay=attributes["trustedOverlay"].lower() == "true",
-                flags=Flags(
-                    not_touchable=attributes["flags"]["NOT_TOUCHABLE"].lower()
-                    == "true",
-                    not_focusable=attributes["flags"]["NOT_FOCUSABLE"].lower()
-                    == "true",
-                    not_touch_modal=attributes["flags"]["NOT_TOUCH_MODAL"].lower()
-                    == "true",
-                ),
-            ),
-            gesture_monitor=gesture_monitor,
-            pointer_dispatcher=pointer_dispatcher,
-        )
-
-    @staticmethod
-    def split_attributes(s):
-        parts = []
+    def _split_components(s: str):
+        components = []
         current = []
-        bracket_depth = 0
-
-        for char in s:
-            if char == "[":
-                bracket_depth += 1
-            elif char == "]":
-                bracket_depth -= 1
-
-            if char == "," and bracket_depth == 0:
-                parts.append("".join(current).strip())
+        brace_level = 0
+        for c in s:
+            if c == "{":
+                brace_level += 1
+            elif c == "}":
+                brace_level -= 1
+            if c == "," and brace_level == 0:
+                components.append("".join(current).strip())
                 current = []
             else:
-                current.append(char)
-
+                current.append(c)
         if current:
-            parts.append("".join(current).strip())
+            components.append("".join(current).strip())
+        return components
 
-        return parts
+    @staticmethod
+    def _parse_entity(comp: str):
+        entity = {"id": None, "name": None, "server": False, "attributes": None}
+        tokens = comp.split()
+        if not tokens:
+            return None
+        if re.match(r"^[0-9a-fA-F]+$", tokens[0]):
+            entity["id"] = tokens[0]
+            rest = tokens[1:]
+        else:
+            rest = tokens.copy()
+        if rest and rest[-1] == "(server)":
+            entity["server"] = True
+            rest = rest[:-1]
+        entity["name"] = " ".join(rest)
+        return entity
+
+    @staticmethod
+    def _parse_attributes(comp: str):
+        s = comp[1:-1].strip()
+        attributes = {}
+        parts = s.split(", ")
+        for part in parts:
+            key_value = part.split("=", 1)
+            if len(key_value) == 2:
+                key, value = key_value
+                attributes[key] = value
+        return attributes
+
+    @staticmethod
+    def _parse_log(lines: List[LogcatLine]):
+        parsed_logs = []
+        for line in lines:
+            message = line.message.split("Interaction with: ", 1)[1]
+            components = LastUserActivityPlugin._split_components(message)
+            interactions = []
+            for comp in components:
+                if comp.startswith("{") and comp.endswith("}"):
+                    if interactions:
+                        interactions[-1]["attributes"] = (
+                            LastUserActivityPlugin._parse_attributes(comp)
+                        )
+                else:
+                    entity = LastUserActivityPlugin._parse_entity(comp)
+                    if entity:
+                        interactions.append(entity)
+            interaction = interactions[0]
+            result = InteractionLog(
+                interaction_id=interaction["id"],
+                component=interaction["name"],
+                attributes=interaction["attributes"],
+            )
+            parsed_logs.append(result)
+        return parsed_logs
 
     @staticmethod
     def _parse_touchable_region(region_str: str) -> List[Tuple[int, int]]:
