@@ -14,6 +14,15 @@ with open(CONFIG_PATH, "rb") as f:
 extract_path = Path(config["extract_path"])
 
 
+def unzip_and_delete(zip_file: Path, unzip_dir: Path):
+    try:
+        with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zip_ref.extractall(unzip_dir)
+        os.remove(zip_file)
+    except (zipfile.BadZipFile, PermissionError, FileNotFoundError) as e:
+        print(f"Error processing {zip_file}: {e}")
+
+
 class BugreportDirs:
     def __init__(self):
         self.bugreport_txt = Path()
@@ -40,66 +49,53 @@ class Bugreport:
     @classmethod
     def from_zip(cls, bugreport_zip_path: Path, feedback_id: str) -> "Bugreport":
         bugreport = cls()
-        bugreport_dirs = Bugreport.extract(
-            feedback_id=feedback_id,
+        feedback_dir = extract_path / str(feedback_id)
+        Bugreport.extract(
+            feedback_dir=feedback_dir,
             bugreport_zip_path=bugreport_zip_path,
-            bugreport_extract_path=extract_path,
         )
-        bugreport.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
-        bugreport.bugreport_txt.load()
-        bugreport.anr_files = bugreport_dirs.anr_files
-        bugreport.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
-        bugreport.miuilog_scouts = bugreport_dirs.miuilog_scout_dirs
+        bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
+        bugreport.load(bugreport_dirs)
         return bugreport
 
     @classmethod
-    def extract(
-        cls, feedback_id, bugreport_zip_path: Path, bugreport_extract_path: Path
-    ) -> BugreportDirs:
+    def from_dir(cls, feedback_id: str) -> "Bugreport":
+        bugreport = cls()
+        feedback_dir = extract_path / str(feedback_id)
+        bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
+        # print("bugreport_dirs", bugreport_dirs)
+        bugreport.load(bugreport_dirs)
+        return bugreport
+
+    @staticmethod
+    def extract(feedback_dir: Path, bugreport_zip_path: Path) -> None:
+        os.makedirs(feedback_dir, exist_ok=True)
+        unzip_and_delete(bugreport_zip_path, feedback_dir)
+
+    @staticmethod
+    def load_required_file_paths(feedback_dir: Path) -> BugreportDirs:
         """
-        Extracts the bugreport zip file and organizes its contents into directories.
+        Load the unzipped bugreport and gather some paths related to stability.
         Args:
-            feedback_id (str): The feedback ID.
-            bugreport_zip (Path): Path to the bugreport zip file.
-            user_feedback_path (Path): Path to the user feedback directory.
+            feedback_dir (Path): Path to the unzipped bugreport.
         Returns:
             BugreportDirs: An object containing paths to the extracted directories.
         """
+
         bugreport_dirs = BugreportDirs()
+        bugreport_dir = feedback_dir / "bugreport"
+        print(bugreport_dir)
 
-        def unzip_and_delete(zip_file: Path, unzip_dir: Path):
-            try:
-                with zipfile.ZipFile(zip_file, "r") as zip_ref:
-                    zip_ref.extractall(unzip_dir)
-                os.remove(zip_file)
-            except (zipfile.BadZipFile, PermissionError, FileNotFoundError) as e:
-                print(f"Error processing {zip_file}: {e}")
-
-        # Create feedback directory if it doesn't exist
-        feedback_dir = bugreport_extract_path / str(feedback_id)
-        os.makedirs(feedback_dir, exist_ok=True)
-
-        # Extract and remove the initial bugreport zip
-        unzip_and_delete(bugreport_zip_path, feedback_dir)
-
-        # Change to feedback directory
-        # os.chdir(feedback_dir)
-
-        # Find bugreport zip file
+        # Unzip the bugreport if not extracted
         bugreport_zip_path = next(
             iter(glob.glob(str(feedback_dir / "bugreport*.zip"))), None
         )
         if not bugreport_zip_path:
             print("No bugreport*.zip file found")
-            return
-
-        # Create directory name from zip filename
-        bugreport_dir = feedback_dir / "bugreport"
-        print(bugreport_dir, bugreport_zip_path)
-
-        # Extract bugreport zip and remove it
-        os.makedirs(bugreport_dir, exist_ok=True)
-        unzip_and_delete(bugreport_zip_path, bugreport_dir)
+        else:
+            print(bugreport_dir, bugreport_zip_path)
+            os.makedirs(bugreport_dir, exist_ok=True)
+            unzip_and_delete(bugreport_zip_path, bugreport_dir)
 
         # Find bugreport txt file
         bugreport_txt_path = next(
@@ -107,24 +103,21 @@ class Bugreport:
         )
         if not bugreport_txt_path:
             print("No bugreport*.txt file found")
-            return
+            return None
         else:
             bugreport_txt_path = Path(bugreport_txt_path)
             bugreport_dirs.bugreport_txt = bugreport_txt_path
 
+        # Find ANR files
         anr_files_dir = bugreport_dir / "FS" / "data" / "anr"
         if os.path.isdir(anr_files_dir):
-            os.chdir(anr_files_dir)
-            print(os.getcwd())
-
-            # Unzip all zip files in this folder
             for file in os.listdir(anr_files_dir):
                 print(file)
                 bugreport_dirs.anr_files.append(anr_files_dir / file)
         else:
             print("No anr folder found")
 
-        # Check if specific bugreport folder exists
+        # Find MQS reboot files
         reboot_mqs_dir = (
             bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "reboot"
         )
@@ -141,6 +134,7 @@ class Bugreport:
         else:
             print("No reboot mqs folder found")
 
+        # Find Scout files
         scout_mqs_dir = (
             bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "scout"
         )
@@ -169,5 +163,12 @@ class Bugreport:
         else:
             print("No scout mqs folder found")
 
-        print(bugreport_dirs)
+        print("Ready to return ", bugreport_dirs)
         return bugreport_dirs
+
+    def load(self, bugreport_dirs: BugreportDirs):
+        self.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
+        self.bugreport_txt.load()
+        self.anr_files = bugreport_dirs.anr_files
+        self.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
+        self.miuilog_scouts = bugreport_dirs.miuilog_scout_dirs

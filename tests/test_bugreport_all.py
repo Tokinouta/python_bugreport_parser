@@ -15,4 +15,5 @@ class TestBugreportAll(unittest.TestCase):
         )
         feedback_id = Path("111353833")
 
-        Bugreport.from_zip(bugreport_zip_path, feedback_id)
+        bugreport = Bugreport.from_zip(bugreport_zip_path, feedback_id)
+        self.assertTrue(bugreport.bugreport_txt.loaded)
