@@ -6,6 +6,7 @@ import zipfile
 import tomllib  # or import tomli as tomllib for older versions
 
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
+from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
 
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config/config.toml"
@@ -25,14 +26,15 @@ def unzip_and_delete(zip_file: Path, unzip_dir: Path):
 
 class BugreportDirs:
     def __init__(self):
-        self.bugreport_txt = Path()
+        self.bugreport_txt_path = Path()
         self.anr_files: List[Path] = []
         self.miuilog_reboot_dirs: List[Path] = []
         self.miuilog_scout_dirs: List[Path] = []
+        self.dumpstate_board_path: Path = Path()
 
     def __str__(self):
         return (
-            f"BugreportDirs(bugreport_txt={self.bugreport_txt}, \n"
+            f"BugreportDirs(bugreport_txt={self.bugreport_txt_path}, \n"
             f"anr_files={self.anr_files}, \n"
             f"miuilog_reboot_dir={self.miuilog_reboot_dirs}, \n"
             f"miuilog_scout_dir={self.miuilog_scout_dirs})"
@@ -45,6 +47,7 @@ class Bugreport:
         self.anr_files: List[str] = []
         self.miuilog_reboots: List[str] = []
         self.miuilog_scouts: List[str] = []
+        self.dumpstate_board: DumpstateBoard = None
 
     @classmethod
     def from_zip(cls, bugreport_zip_path: Path, feedback_id: str) -> "Bugreport":
@@ -106,7 +109,14 @@ class Bugreport:
             return None
         else:
             bugreport_txt_path = Path(bugreport_txt_path)
-            bugreport_dirs.bugreport_txt = bugreport_txt_path
+            bugreport_dirs.bugreport_txt_path = bugreport_txt_path
+
+        # Find dumpstate board file
+        dumpstate_board_path = next(
+            iter(glob.glob(str(bugreport_dir / "dumpstate_board*.txt"))), None
+        )
+        if dumpstate_board_path:
+            bugreport_dirs.dumpstate_board_path = Path(dumpstate_board_path)
 
         # Find ANR files
         anr_files_dir = bugreport_dir / "FS" / "data" / "anr"
@@ -167,8 +177,14 @@ class Bugreport:
         return bugreport_dirs
 
     def load(self, bugreport_dirs: BugreportDirs):
-        self.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt)
+        self.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt_path)
         self.bugreport_txt.load()
         self.anr_files = bugreport_dirs.anr_files
         self.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
         self.miuilog_scouts = bugreport_dirs.miuilog_scout_dirs
+        if bugreport_dirs.dumpstate_board_path:
+            self.dumpstate_board = DumpstateBoard()
+            self.dumpstate_board.load(bugreport_dirs.dumpstate_board_path)
+        else:
+            print("No dumpstate board file found")
+        print("Loaded bugreport:", self)
