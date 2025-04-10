@@ -65,7 +65,7 @@ class LastUserActivityPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
@@ -79,11 +79,8 @@ class LastUserActivityPlugin(BasePlugin):
             f"Found {len(input_interactions)} input interactions, {input_interactions[0]}"
         )
         self.input_interactions = LastUserActivityPlugin._parse_log(input_interactions)
-        analysis_context.set_result(
-            self.name,
-            PluginResult(
-                self.input_interactions, metadata={"description": "Interaction Log"}
-            ),
+        return PluginResult(
+            self.input_interactions, metadata={"description": "Interaction Log"}
         )
 
     def report(self) -> str:

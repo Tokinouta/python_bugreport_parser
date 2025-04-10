@@ -105,7 +105,7 @@ class InputFocusPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Main analysis entry point"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
@@ -123,10 +123,7 @@ class InputFocusPlugin(BasePlugin):
 
         # Group events into focus tuples
         self.records = InputFocusPlugin._group_focus_events(events)
-        analysis_context.set_result(
-            self.name,
-            PluginResult(self.records, metadata={"description": "InputFocusTuples"}),
-        )
+        return PluginResult(self.records, metadata={"description": "InputFocusTuples"})
 
     def report(self) -> str:
         return "\n".join(str(record) for record in self.records)

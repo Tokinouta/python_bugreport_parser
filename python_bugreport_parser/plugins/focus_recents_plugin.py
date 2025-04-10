@@ -18,7 +18,7 @@ class FocusRecentsPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         error_timestamp = bugreport.error_timestamp
@@ -32,7 +32,8 @@ class FocusRecentsPlugin(BasePlugin):
 
         for record in reversed(focus_records):
             if (
-                record.focus_id != "recents_animation_input_consumer"
+                record.focus_id
+                != "recents_animation_input_consumer"
                 # or not record.request
                 # or abs(record.request.timestamp - error_timestamp).total_seconds() > 180
             ):
@@ -52,14 +53,12 @@ class FocusRecentsPlugin(BasePlugin):
                 self.error_focus_record = record
                 break
 
-        analysis_context.set_result(
-            self.name,
+        return (
             PluginResult(
-                "Possibly stuck in recents_animation_input_consumer",
+                self.report(),
                 metadata={"description": "Bugreport timestamp"},
             ),
         )
-        # print(f"Analyzed timestamps: {self.timestamp}")
 
     def report(self) -> str:
         if self.possibly_stucked:

@@ -20,7 +20,7 @@ class RebootPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
         bugreport_txt: BugreportTxt = analysis_context.bugreport.bugreport_txt
 
@@ -65,9 +65,10 @@ class RebootPlugin(BasePlugin):
             reboot_records,
             key=lambda x: x.timestamp,
         )
-        analysis_context.set_result(
-            self.name,
-            PluginResult(self.reboot_records, metadata={"description": "RebootRecords"}),
+        return (
+            PluginResult(
+                self.reboot_records, metadata={"description": "RebootRecords"}
+            ),
         )
 
     def report(self) -> str:

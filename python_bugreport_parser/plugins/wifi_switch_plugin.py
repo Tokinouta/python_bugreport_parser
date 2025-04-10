@@ -21,7 +21,7 @@ class WifiSwitchPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
         bugreport_txt: BugreportTxt = analysis_context.bugreport.bugreport_txt
 
@@ -34,9 +34,8 @@ class WifiSwitchPlugin(BasePlugin):
             if "setWifiEnabledInternal" in line:
                 self.switch_records.append(line)
 
-        analysis_context.set_result(
-            self.name,
-            PluginResult(self.switch_records, metadata={"description": "RebootRecords"}),
+        return PluginResult(
+            self.switch_records, metadata={"description": "RebootRecords"}
         )
 
     def report(self) -> str:

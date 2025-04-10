@@ -59,12 +59,16 @@ class BasePlugin(ABC):
         self.dependencies = dependencies if dependencies is not None else []
 
     @abstractmethod
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         pass
 
     @abstractmethod
     def report(self) -> str:
         pass
+
+    def run(self, analysis_context: BugreportAnalysisContext) -> None:
+        result = self.analyze(analysis_context)
+        analysis_context.set_result(self.name, result)
 
 
 class PluginRepo:
@@ -93,11 +97,11 @@ class PluginRepo:
             return None
 
     @classmethod
-    def analyze_all(cls, analysis_context: BugreportAnalysisContext) -> None:
+    def run_all(cls, analysis_context: BugreportAnalysisContext) -> None:
         """Run analysis using all plugins"""
         with cls._lock:
             for plugin in cls._plugins:
-                plugin.analyze(analysis_context)
+                plugin.run(analysis_context)
 
     @classmethod
     def report_all(cls) -> str:

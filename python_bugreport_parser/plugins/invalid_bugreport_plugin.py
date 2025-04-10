@@ -2,7 +2,11 @@ from datetime import datetime
 
 from python_bugreport_parser.bugreport import BugreportTxt
 from python_bugreport_parser.bugreport.dumpsys_entry import MqsServiceDumpsysEntry
-from python_bugreport_parser.plugins import BasePlugin, BugreportAnalysisContext, PluginResult
+from python_bugreport_parser.plugins import (
+    BasePlugin,
+    BugreportAnalysisContext,
+    PluginResult,
+)
 
 
 class InvalidBugreportPlugin(BasePlugin):
@@ -18,7 +22,7 @@ class InvalidBugreportPlugin(BasePlugin):
     def version(self) -> str:
         return "1.0.0"
 
-    def analyze(self, analysis_context: BugreportAnalysisContext) -> None:
+    def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
         # find the result of TimestampPlugin from analysis_context.results
@@ -44,11 +48,8 @@ class InvalidBugreportPlugin(BasePlugin):
         ]
         self.is_invalid = len(candidate_records) == 0
         self.reboot_records = candidate_records
-        analysis_context.set_result(
-            self.name,
-            PluginResult(
-                self.reboot_records, metadata={"description": "Reboot records"}
-            ),
+        return PluginResult(
+            self.reboot_records, metadata={"description": "Reboot records"}
         )
 
     def report(self) -> str:
