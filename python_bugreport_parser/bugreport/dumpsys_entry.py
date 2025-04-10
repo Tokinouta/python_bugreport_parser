@@ -31,7 +31,6 @@ class LocalRebootRecord:
         self.detail: str = ""
         self.process: str = ""
         self.type: str = ""
-        self.current_miui_version: str = ""
         self.sum: str = ""
         self.is_kernel_reboot = False
         self.boot_reason: str = ""
@@ -47,11 +46,6 @@ class LocalRebootRecord:
         self.detail = self.detail if len(self.detail) > 0 else that.detail
         self.process = self.process if len(self.process) > 0 else that.process
         self.type = self.type if len(self.type) > 0 else that.type
-        self.current_miui_version = (
-            self.current_miui_version
-            if len(self.current_miui_version) > 0
-            else that.current_miui_version
-        )
         self.sum = self.sum if len(self.sum) > 0 else that.sum
         self.boot_reason = (
             self.boot_reason if len(self.boot_reason) > 0 else that.boot_reason
@@ -76,9 +70,6 @@ class LocalRebootRecord:
     def set_kernel_reboot(self, powerup_reason):
         self.is_kernel_reboot = True
         self.type = powerup_reason
-
-    def is_current_version(self):
-        return self.current_miui_version == self.miui_version
 
     def get_simple_type(self):
         if self.is_je():
@@ -125,7 +116,6 @@ class LocalRebootRecord:
             f"详情: {self.detail}\n"
             f"进程: {self.process}\n"
             f"异常类型: {self.type}\n"
-            f"当前MIUI版本: {self.current_miui_version}\n"
             f"summary: {self.sum}\n"
             f"是否是内核重启: {self.is_kernel_reboot}\n"
             f"启动原因: {self.boot_reason}\n"
@@ -236,8 +226,14 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
             elif (key := "vm reboot        :") and line.startswith(key):
                 arecord.type = line[len(key) :]
                 continue
-            elif (key := "kernelreboot     :") and line.startswith(key):
+            elif (key := "kernel reboot    :") and line.startswith(key):
                 arecord.set_kernel_reboot(line[len(key) :])
+                continue
+            elif (key := "ocp reboot       :") and line.startswith(key):
+                arecord.set_kernel_reboot(line[len(key) :])
+                continue
+            elif (key := "system hang       :") and line.startswith(key):
+                arecord.type = line[len(key) :]
                 continue
             elif (key := "miui version     :") and line.startswith(key):
                 arecord.miui_version = line[len(key) :]
@@ -267,7 +263,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
                         break
 
                     details += line + "\n"
-                arecord.detail = details
+                arecord.detail = details.strip()
                 break  # det is always at the last, so break the loop now
 
         # find the one with the same timestamp
