@@ -24,89 +24,84 @@ class BugreportTxt:
         self.error_timestamp: datetime = None
         self.loaded: bool = False
 
-    def _mmap_file(self, path: Path) -> mmap.mmap:
-        with open(path, "rb") as f:
-            return mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+    def set_error_timestamp(self, error_timestamp: datetime) -> None:
+        """
+        Set the error timestamp.
+
+        Args:
+            error_timestamp (datetime): The error timestamp to set.
+        """
+        self.error_timestamp = error_timestamp
+
+    def get_sections(self) -> List[Section]:
+        return self.sections
 
     def load(self) -> None:
-        matches = self.read_and_slice()
-        self.pair_sections(matches)
-        self.loaded = True
-
-    def read_and_slice(self) -> List[Tuple[int, str]]:
         lines = self._read_file()
-
         self.metadata.parse(lines)
 
-        matches = []
-
-        def filter_and_add(matches: list, line_number: int, group: str):
-            if group == "BLOCK STAT" or group.endswith("PROTO"):
-                return
-            matches.append((line_number, group))
-
+        current_section_lines = []
+        section_start = ("", -1)
         for line_num, line in enumerate(
             lines[self.metadata.lines_passed :], start=self.metadata.lines_passed
         ):
             if match := SECTION_END.search(line):
-                if group := match.group(2):
-                    filter_and_add(matches, line_num, group)
-            elif match := SECTION_BEGIN.search(line):
-                if group := match.group(1):
-                    filter_and_add(matches, line_num, group)
-            elif match := SECTION_BEGIN_NO_CMD.search(line):
-                if group := match.group(1):
-                    filter_and_add(matches, line_num, group)
+                group = match.group(2)
+                self._create_and_add_section(
+                    name=group,
+                    start_line=(
+                        section_start[1] + 1 if section_start[1] != -1 else line_num - 1
+                    ),
+                    end_line=line_num - 1,
+                    lines=current_section_lines,
+                )
+                section_start = ("", -1)
+                current_section_lines = []
+            elif (match := SECTION_BEGIN_NO_CMD.search(line)) or (
+                match := SECTION_BEGIN.search(line)
+            ):
+                group = match.group(1)
+                # skip BLOCK STAT, since this is not a beginning of a section
+                if group == "BLOCK STAT":
+                    continue
 
-        return matches
-
-    def pair_sections(self, matches: List[Tuple[int, str]]) -> None:
-        lines = self._read_file()
-        second_occurrence = False
-
-        for idx, (line_num, content) in enumerate(matches):
-            if idx > 0 and matches[idx - 1][1] in content:
-                second_occurrence = True
-
-            if not second_occurrence:
-                continue
-
-            prev_line_num, _ = matches[idx - 1]
-            start_line = prev_line_num
-            end_line = line_num
-
-            # workaround for the "for_each_pid" issue
-            if start_line + 1 >= end_line:
-                continue
-
-            # Create appropriate section content
-            if content == "SYSTEM LOG" or content == "EVENT LOG":
-                section_content = LogcatSection()
-            elif content == "DUMPSYS":
-                section_content = DumpsysSection()
-            elif content == "SYSTEM PROPERTIES":
-                section_content = SystemPropertySection()
+                section_start = group, line_num
             else:
-                section_content = OtherSection()
+                current_section_lines.append(line)
 
-            current_section = Section(
-                name=content,
-                start_line=start_line + 1,
-                end_line=end_line - 1,
-                content=section_content,
-            )
+        self.sections.sort(key=lambda x: x.start_line)
+        self.loaded = True
 
-            this_year = datetime.now().year
-            current_section.parse(
-                lines[start_line + 1 : end_line],
-                self.metadata.timestamp.year if self.metadata.timestamp else this_year,
-            )
+    def _create_and_add_section(
+        self, name: str, start_line: int, end_line: int, lines: List[str]
+    ) -> Section:
+        if name == "SYSTEM LOG" or name == "EVENT LOG":
+            section_content = LogcatSection()
+        elif name == "DUMPSYS":
+            section_content = DumpsysSection()
+        elif name == "SYSTEM PROPERTIES":
+            section_content = SystemPropertySection()
+        else:
+            section_content = OtherSection()
 
-            self.sections.append(current_section)
-            second_occurrence = False
+        current_section = Section(
+            name=name,
+            start_line=start_line,
+            end_line=end_line,
+            content=section_content,
+        )
 
-    def get_sections(self) -> List[Section]:
-        return self.sections
+        this_year = datetime.now().year
+        current_section.parse(
+            lines,
+            self.metadata.timestamp.year if self.metadata.timestamp else this_year,
+        )
+        self.sections.append(current_section)
+        # print(name, start_line + 1, end_line - 1)
+
+    def _mmap_file(self, path: Path) -> mmap.mmap:
+        with open(path, "rb") as f:
+            return mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 
     def _read_file(self) -> List[str]:
         """
@@ -125,12 +120,3 @@ class BugreportTxt:
         # splitlines() is not used since there are other characters that may cause wrong linebreaks
         lines = content.split("\n")
         return lines
-
-    def set_error_timestamp(self, error_timestamp: datetime) -> None:
-        """
-        Set the error timestamp.
-
-        Args:
-            error_timestamp (datetime): The error timestamp to set.
-        """
-        self.error_timestamp = error_timestamp

@@ -66,7 +66,6 @@ class Bugreport:
         bugreport = cls()
         feedback_dir = extract_path / str(feedback_id)
         bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
-        # print("bugreport_dirs", bugreport_dirs)
         bugreport.load(bugreport_dirs)
         return bugreport
 

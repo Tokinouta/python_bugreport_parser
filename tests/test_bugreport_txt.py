@@ -36,28 +36,19 @@ class TestBugreport(unittest.TestCase):
 
         self.bugreport = BugreportTxt(self.example_txt)
 
-    def test_read_and_slice(self):
-        matches = self.bugreport.read_and_slice()
-        self.assertEqual(len(matches), 274)
+    def test_load(self):
+        start_time = time.time()
+        self.bugreport.load()
+        parse_time = time.time() - start_time
+        print(f"Time taken for load2: {parse_time:.2f}s")
 
         # Test timestamp
         expected_date = datetime(2024, 8, 16, 10, 2, 11)
         self.assertEqual(self.bugreport.metadata.timestamp, expected_date)
 
-    def test_pair_sections(self):
-        start_time = time.time()
-        matches = self.bugreport.read_and_slice()
-        parse_time = time.time() - start_time
-        print(f"Time taken for read_and_slice: {parse_time:.2f}s")
-
-        start_time = time.time()
-        self.bugreport.pair_sections(matches)
-        pair_time = time.time() - start_time
-        print(f"Time taken for pair_sections: {pair_time:.2f}s")
-
         # There are still invalid sections, but just ignore them for now
         # They won't cause issues in our analysis
-        self.assertEqual(len(self.bugreport.sections), 114)
+        self.assertEqual(len(self.bugreport.sections), 145)
 
         # Find sections by type
         system_log = next(
@@ -90,9 +81,6 @@ class TestBugreport(unittest.TestCase):
         )
         self.assertIsInstance(other.content, OtherSection)
 
-    def test_parse_line(self):
-        matches = self.bugreport.read_and_slice()
-        self.bugreport.pair_sections(matches)
 
         system_log_sections = [
             s for s in self.bugreport.sections if s.name == "SYSTEM LOG"
@@ -124,7 +112,6 @@ class TestBugreport(unittest.TestCase):
         system_props = next(
             s for s in self.bugreport.sections if s.name == "SYSTEM PROPERTIES"
         )
-        print(system_props.start_line, system_props.end_line)
         self.assertEqual(
             system_props.content.properties["persist.sys.boot.reason.history"],
             "reboot,1723775375\nreboot,1723774219\nreboot,1723648846\nreboot,1723598091",
