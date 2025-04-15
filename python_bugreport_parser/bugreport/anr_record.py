@@ -5,6 +5,11 @@ from typing import Dict, List
 
 from dateutil.parser import isoparse
 
+
+SECTION_PATTERN = re.compile(  # Regex pattern to match each section, including the delimiter lines
+    r"----- (pid \d+|Waiting Channels: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
+    re.DOTALL,
+)
 PROCESS_INFO_PATTERN = re.compile(
     r"----- (Waiting Channels: )?pid (?P<pid>\d+) at (?P<timestamp>[\d\-:\.\+ ]+)\s+-----"
 )
@@ -13,6 +18,8 @@ NATIVE_FRAME_PATTERN = re.compile(
     r"^\s*(native:\s*)?#(?P<frame_number>\d{2}) pc (?P<pc_address>[0-9a-f]+)\s+(?P<library_path>\S+)\s+(?:\((?P<symbol_name>.+?)\))?\s+(?:\(BuildId: (?P<build_id>[^\)]+)\))?",
 )
 JAVA_FRAME_PATTERN = re.compile(r"^\s*at\s+(?P<frame>.*?)$")
+FAILED_FRAME_PATTERN = re.compile(r"sysTid=(\d+)\s+state=(\w)\s+(\S+)")
+THREAD_NAME_PATTERN = re.compile(r'"(?P<thread_name>.*?)"')
 LOCK_PATTERN = re.compile(
     r"^\s*- (waiting on|waiting to lock|locked)\s+<(?P<lock_address>0x[0-9a-f]+)>\s?(\(.*\))?",
 )
@@ -67,7 +74,7 @@ class AnrTrace:
         return instance
 
     # Function to parse the process information
-    def parse_process_info(self, file_content: str):
+    def parse_process_info(self, file_content: str) -> None:
         lines = file_content.strip().split("\n")
 
         if (match := PROCESS_INFO_PATTERN.search(lines[0])) and match:
@@ -91,44 +98,20 @@ class AnrTrace:
         print(f"is_valid: {self.is_valid}")
         if not self.is_valid:
             lines = file_content.strip().split("\n")
-
-            # Skip the first lines and find the first empty line to the threads
-            lines_passed = 0
-            for i, line in enumerate(lines):
-                if line.strip() == "":
-                    lines_passed = i
-                    break
-            lines_passed += 1
-
-            for line in lines[lines_passed:]:
-                # print(line)
-                if line.strip() == "":
-                    break
-
-                metadata = {}
-                frames = []
-                elements = line.split(" ")
-                for element in elements:
-                    # print(element)
-                    if element.find("=") >= 0:
-                        key, val = element.split("=")
-                        metadata[key] = val.strip('"')
-                    elif len(element) > 0:
-                        frames.append(element.strip())
-                # print(frames, metadata)
-                self.threads.append(
-                    {
-                        "thread_name": "unknown",
-                        "metadata": metadata,
-                        "frames": frames,
-                        "lock_info": [],
-                    }
-                )
+            for line in lines:
+                if (match := FAILED_FRAME_PATTERN.search(line)) and match:
+                    self.threads.append(
+                        {
+                            "thread_name": "unknown",
+                            "metadata": {
+                                "sysTid": match.group(1),
+                                "state": match.group(2),
+                            },
+                            "frames": [match.group(3)],
+                            "lock_info": [],
+                        }
+                    )
             return
-
-        # Split the content into thread stacks based on thread name
-        # thread_contents = THREAD_SPLIT_PATTERN.split(file_content.strip())
-        # print(f"len of thread_contents: {len(thread_contents)}")
 
         for thread_content in THREAD_SPLIT_PATTERN.finditer(file_content):
             # print(thread_content)
@@ -158,11 +141,6 @@ class AnrTrace:
     # Function to parse thread metadata and frames
     def parse_thread_stack(self, thread_content: str) -> tuple:
         # Extract thread name
-        # TODO: parse additional information in this line
-        thread_name_pattern = re.compile(r'"(?P<thread_name>.*?)"')
-        # line_of_thread_start = 0
-        # for i, line in enumerate(thread_content.split("\n")):
-        # thread_content = "\n".join(thread_content.split("\n")[line_of_thread_start:])
 
         lines = thread_content.split("\n")
         metadata = {}
@@ -170,13 +148,12 @@ class AnrTrace:
         lock_info = []
         thread_name = "unknown"
         for i, line in enumerate(lines):
-            # print(line)
-            if (match := thread_name_pattern.match(line)) and match:
+            if (match := THREAD_NAME_PATTERN.match(line)) and match:
+                # TODO: parse additional information in this line
                 thread_name = match.group("thread_name")
             elif line.find("|") >= 0:
                 for match in re.finditer(r'(\S+)=(".*?"|\(.*?\)|\S+)', line):
                     key, val = match.groups()
-                    # print(key, val)
                     metadata[key] = val.strip('"')  # remove quotes if present
             elif (match := NATIVE_FRAME_PATTERN.match(line)) and match:
                 frame = {
@@ -242,19 +219,12 @@ class AnrRecord:
         self.traces: List[AnrTrace] = []
 
     # Function to split the ANR trace file into sections based on the given pattern
+    # TODO: add a function that can gather all the traces of a single process
+    #  across multiple ANR traces, thus providing a more comprehensive view of
+    #  the process's state by tracing across time.
     def split_anr_trace(self, file_content):
-        # Regex pattern to match each section, including the delimiter lines
-        section_pattern = re.compile(
-            r"----- (pid \d+|Waiting Channels: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
-            re.DOTALL,
-        )
-
-        # Find all sections that match the pattern
-        sections = section_pattern.findall(file_content)
-        print(len(sections))
-
         # Collect the matched sections
-        for match in section_pattern.finditer(file_content):
+        for match in SECTION_PATTERN.finditer(file_content):
             # Append the section as a whole (including delimiter lines)
             section_content = match.group(0) if match else ""
             # print(type(section_content), len())
