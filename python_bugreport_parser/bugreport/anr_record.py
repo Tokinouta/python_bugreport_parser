@@ -1,41 +1,81 @@
-from datetime import datetime
 import re
 from collections import defaultdict
-from typing import List
+from datetime import datetime
+from typing import Dict, List
+
+from dateutil.parser import isoparse
+
+PROCESS_INFO_PATTERN = re.compile(
+    r"----- (Waiting Channels: )?pid (?P<pid>\d+) at (?P<timestamp>[\d\-:\.\+ ]+)\s+-----"
+)
+THREAD_SPLIT_PATTERN = re.compile(r'"(?P<thread_name>.*?)"[\s\S]*?\n\n', re.MULTILINE)
+NATIVE_FRAME_PATTERN = re.compile(
+    r"^\s*(native:\s*)?#(?P<frame_number>\d{2}) pc (?P<pc_address>[0-9a-f]+)\s+(?P<library_path>\S+)\s+(?:\((?P<symbol_name>.+?)\))?\s+(?:\(BuildId: (?P<build_id>[^\)]+)\))?",
+)
+JAVA_FRAME_PATTERN = re.compile(r"^\s*at\s+(?P<frame>.*?)$")
+LOCK_PATTERN = re.compile(
+    r"^\s*- (waiting on|waiting to lock|locked)\s+<(?P<lock_address>0x[0-9a-f]+)>\s?(\(.*\))?",
+)
 
 
 class AnrTrace:
-    process_info_pattern = re.compile(
-        r"----- (Waiting Channels: )?pid (?P<pid>\d+) at (?P<timestamp>[\d\-:\.\+ ]+)\s+-----"
-    )
-
-    process_without_stack_pattern = re.compile(
-        r"----- Waiting Channels: pid (?P<pid>\d+) at (?P<timestamp>[\d\-:\.\+ ]+)\s+-----\n"
-        r"Cmd line: (?P<cmd_line>.*)\n"
-    )
+    """
+    Class to parse and analyze ANR (Application Not Responding) traces of a single process.
+    """
 
     def __init__(self):
         self.is_valid = False  # if there are no stack traces, this is False
-        self.pid = ""
-        self.timestamp = ""
-        self.cmd_line = ""
-        self.build_fingerprint = ""
-        self.abi = ""
-        self.build_type = ""
-        self.thread_metadata: List[dict] = []
-        self.thread_frames: List[dict] = []
+        self.pid: int = 0
+        self.timestamp: datetime = datetime.now()
+        self.cmd_line: str = ""
+        self.build_fingerprint: str = ""
+        self.abi: str = ""
+        self.build_type: str = ""
+        self.waiting_threads: Dict[str, List[str]] = defaultdict(list)
+        self.holding_threads: Dict[str, List[str]] = defaultdict(list)
+        self.threads: List[dict] = []
+
+    def __str__(self):
+        return (
+            f"pid: {self.pid}\n"
+            f"timestamp: {self.timestamp}\n"
+            f"cmd_line: {self.cmd_line}\n"
+            f"build_fingerprint: {self.build_fingerprint}\n"
+            f"abi: {self.abi}\n"
+            f"build_type: {self.build_type}\n"
+            f"waiting_threads: {self.waiting_threads}\n"
+            f"holding_threads: {self.holding_threads}\n"
+            f"threads: {self.threads}\n"
+        )
+
+    @property
+    def process_info(self):
+        return {
+            "pid": self.pid,
+            "timestamp": self.timestamp,
+            "cmd_line": self.cmd_line,
+            "build_fingerprint": self.build_fingerprint,
+            "abi": self.abi,
+            "build_type": self.build_type,
+        }
+
+    @classmethod
+    def from_raw_str(cls, raw_str: str) -> "AnrTrace":
+        instance = cls()
+        instance.parse_process_info(raw_str)
+        instance.parse_threads(raw_str)
+        return instance
 
     # Function to parse the process information
     def parse_process_info(self, file_content: str):
-        lines = file_content.split("\n")
+        lines = file_content.strip().split("\n")
 
-        if (match := AnrTrace.process_info_pattern.search(lines[0])) and match:
-            self.is_valid = "Waiting channel" not in lines[0]
-            self.pid = match.group("pid")
-            self.timestamp = datetime.strptime(
-                match.group("timestamp"), "%Y-%m-%d %H:%M:%S.%f%z"
-            )
-            for line in lines[1]:
+        if (match := PROCESS_INFO_PATTERN.search(lines[0])) and match:
+            self.is_valid = "Waiting Channel" not in lines[0]
+
+            self.pid = int(match.group("pid"))
+            self.timestamp = isoparse(match.group("timestamp"))
+            for line in lines[1:]:
                 if line.startswith("DALVIK THREADS") or len(line) == 0:
                     break
 
@@ -45,73 +85,53 @@ class AnrTrace:
                     self.build_fingerprint = line.split("Build fingerprint: ")[1]
                 elif line.startswith("ABI: "):
                     self.abi = line.split("ABI: ")[1]
-                elif line.startswith("suspend all histogram"):
-                    self.timestamp = line.split("Timestamp: ")[1]
-
-        return None
-
-    # Function to parse thread metadata and frames
-    def parse_thread_stack(self, thread_content):
-        # Extract thread name
-        thread_name_pattern = re.compile(r'"(?P<thread_name>.*?)"')
-        line_of_thread_start = 0
-        for i, line in enumerate(thread_content.split("\n")):
-            if thread_name_pattern.match(line):
-                print("current line: ", line)
-                line_of_thread_start = i
-                break
-        thread_content = "\n".join(thread_content.split("\n")[line_of_thread_start:])
-
-        thread_name_match = thread_name_pattern.match(thread_content)
-        thread_name = (
-            thread_name_match.group("thread_name") if thread_name_match else "Unknown"
-        )
-
-        # Extract thread metadata (| lines)
-        metadata = {}
-        metadata_pattern = re.compile(
-            r"^\s*\|\s*(?P<key>[\w\s]+)=\s*(?P<value>.*?)$", re.MULTILINE
-        )
-        for metadata_match in metadata_pattern.finditer(thread_content):
-            key = metadata_match.group("key").strip()
-            value = metadata_match.group("value").strip()
-            metadata[key] = value
-
-        # Extract frames (at lines)
-        frames = []
-        frame_pattern = re.compile(r"^\s*at\s+(?P<frame>.*?)$", re.MULTILINE)
-        for frame_match in frame_pattern.finditer(thread_content):
-            frames.append(frame_match.group("frame").strip())
-
-        # Extract lock information (- lines)
-        lock_info = []
-        lock_pattern = re.compile(
-            r"^\s*- (waiting on|waiting to lock|locked)\s+<(?P<lock_address>[0-9a-f]+)>",
-            re.MULTILINE,
-        )
-        for lock_match in lock_pattern.finditer(thread_content):
-            lock_status = lock_match.group(1).strip()
-            lock_address = lock_match.group(2).strip()
-            lock_info.append((lock_status, lock_address))
-
-        return thread_name, metadata, frames, lock_info
 
     # Function to parse all threads and lock contentions
-    def parse_threads(self, file_content):
+    def parse_threads(self, file_content: str) -> None:
+        print(f"is_valid: {self.is_valid}")
+        if not self.is_valid:
+            lines = file_content.strip().split("\n")
+
+            # Skip the first lines and find the first empty line to the threads
+            lines_passed = 0
+            for i, line in enumerate(lines):
+                if line.strip() == "":
+                    lines_passed = i
+                    break
+            lines_passed += 1
+
+            for line in lines[lines_passed:]:
+                # print(line)
+                if line.strip() == "":
+                    break
+
+                metadata = {}
+                frames = []
+                elements = line.split(" ")
+                for element in elements:
+                    # print(element)
+                    if element.find("=") >= 0:
+                        key, val = element.split("=")
+                        metadata[key] = val.strip('"')
+                    elif len(element) > 0:
+                        frames.append(element.strip())
+                # print(frames, metadata)
+                self.threads.append(
+                    {
+                        "thread_name": "unknown",
+                        "metadata": metadata,
+                        "frames": frames,
+                        "lock_info": [],
+                    }
+                )
+            return
+
         # Split the content into thread stacks based on thread name
-        thread_split_pattern = re.compile(
-            r'"(?P<thread_name>.*?)"[\s\S]*?\n\n', re.MULTILINE
-        )
-        thread_contents = thread_split_pattern.split(file_content.strip())
-        print(len(thread_contents))
+        # thread_contents = THREAD_SPLIT_PATTERN.split(file_content.strip())
+        # print(f"len of thread_contents: {len(thread_contents)}")
 
-        # Initialize dictionaries to store waiting and holding threads
-        waiting_threads = defaultdict(list)
-        holding_threads = defaultdict(list)
-        threads = []
-
-        for thread_content in thread_split_pattern.finditer(file_content):
-            print(thread_content)
+        for thread_content in THREAD_SPLIT_PATTERN.finditer(file_content):
+            # print(thread_content)
             if not thread_content:
                 continue
 
@@ -120,13 +140,13 @@ class AnrTrace:
             thread_name, metadata, frames, lock_info = self.parse_thread_stack(content)
 
             # Track waiting and holding threads for locks
-            for lock_status, lock_address in lock_info:
-                if lock_status == "waiting on":
-                    waiting_threads[lock_address].append(thread_name)
+            for lock_status, lock_address, _ in lock_info:
+                if lock_status == "waiting to lock":
+                    self.waiting_threads[lock_address].append(thread_name)
                 elif lock_status == "locked":
-                    holding_threads[lock_address].append(thread_name)
+                    self.holding_threads[lock_address].append(thread_name)
 
-            threads.append(
+            self.threads.append(
                 {
                     "thread_name": thread_name,
                     "metadata": metadata,
@@ -135,20 +155,60 @@ class AnrTrace:
                 }
             )
 
-        return threads, waiting_threads, holding_threads
+    # Function to parse thread metadata and frames
+    def parse_thread_stack(self, thread_content: str) -> tuple:
+        # Extract thread name
+        # TODO: parse additional information in this line
+        thread_name_pattern = re.compile(r'"(?P<thread_name>.*?)"')
+        # line_of_thread_start = 0
+        # for i, line in enumerate(thread_content.split("\n")):
+        # thread_content = "\n".join(thread_content.split("\n")[line_of_thread_start:])
+
+        lines = thread_content.split("\n")
+        metadata = {}
+        frames = []
+        lock_info = []
+        thread_name = "unknown"
+        for i, line in enumerate(lines):
+            # print(line)
+            if (match := thread_name_pattern.match(line)) and match:
+                thread_name = match.group("thread_name")
+            elif line.find("|") >= 0:
+                for match in re.finditer(r'(\S+)=(".*?"|\(.*?\)|\S+)', line):
+                    key, val = match.groups()
+                    # print(key, val)
+                    metadata[key] = val.strip('"')  # remove quotes if present
+            elif (match := NATIVE_FRAME_PATTERN.match(line)) and match:
+                frame = {
+                    "frame_number": match.group("frame_number"),
+                    "pc_address": match.group("pc_address"),
+                    "library_path": match.group("library_path"),
+                    "symbol_name": match.group("symbol_name"),
+                    "build_id": match.group("build_id"),
+                }
+                frames.append(frame)  # Extract frames (at lines)
+            elif (match := JAVA_FRAME_PATTERN.match(line)) and match:
+                frames.append(match.group("frame").strip())
+            elif (match := LOCK_PATTERN.match(line)) and match:
+                lock_status = match.group(1).strip()
+                lock_address = match.group(2).strip()
+                lock_object = match.group(3).strip("()")
+                # print("lock: ", lock_status, lock_address)
+                lock_info.append((lock_status, lock_address, lines[i - 1].strip()))
+                frames[-1] += f"{lock_status} on lock {lock_address} ({lock_object})"
+
+        return thread_name, metadata, frames, lock_info
 
     # Function to display parsed thread and lock information
-    def display_thread_and_lock_info(
-        self, process_info, threads, waiting_threads, holding_threads
-    ):
+    def display_thread_and_lock_info(self):
         print("Process Information:")
-        for key, value in process_info.items():
+        for key, value in self.process_info.items():
             print(f"{key}: {value}")
         print("-" * 40)
 
         print("\nThread Stack Report:")
-        for thread in threads:
-            print(f"\nThread Name: {thread['thread_name']}")
+        for thread in self.threads:
+            print(f"\nThread Name: {thread["thread_name"]}")
             print("Metadata:")
             for key, value in thread["metadata"].items():
                 print(f"  {key}: {value}")
@@ -158,23 +218,21 @@ class AnrTrace:
                 print(f"  {frame}")
 
             print("Lock Information:")
-            for lock_status, lock_address in thread["lock_info"]:
+            for lock_status, lock_address, _ in thread["lock_info"]:
                 print(f"  {lock_status} on lock 0x{lock_address}")
 
         print("\nLock Contentions Report:")
-        for lock_address in set(waiting_threads.keys()).union(
-            set(holding_threads.keys())
+        for lock_address in set(self.waiting_threads.keys()).union(
+            set(self.holding_threads.keys())
         ):
-            holding = holding_threads.get(lock_address, [])
-            waiting = waiting_threads.get(lock_address, [])
+            holding = self.holding_threads.get(lock_address, [])
+            waiting = self.waiting_threads.get(lock_address, [])
 
             if holding:
-                print(f"Lock 0x{lock_address} is held by: {', '.join(holding)}")
+                print(f"Lock {lock_address} is held by: {", ".join(holding)}")
 
             if waiting:
-                print(
-                    f"Lock 0x{lock_address} is being waited on by: {', '.join(waiting)}"
-                )
+                print(f"Lock {lock_address} is being waited by: {", ".join(waiting)}")
             print("-" * 40)
 
 
@@ -187,77 +245,17 @@ class AnrRecord:
     def split_anr_trace(self, file_content):
         # Regex pattern to match each section, including the delimiter lines
         section_pattern = re.compile(
-            r"----- (pid \d+|Waiting channel: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
+            r"----- (pid \d+|Waiting Channels: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
             re.DOTALL,
         )
 
         # Find all sections that match the pattern
         sections = section_pattern.findall(file_content)
+        print(len(sections))
 
         # Collect the matched sections
-        split_sections = []
-        for _ in sections:
+        for match in section_pattern.finditer(file_content):
             # Append the section as a whole (including delimiter lines)
-            match = section_pattern.search(file_content)
-            split_sections.append(match.group(0))
-
-        return split_sections
-
-
-# Example usage
-if __name__ == "__main__":
-    # Load the thread stack content (can be from a file or string)
-    thread_stack_content = """
------ pid 2270 at 2024-08-16 10:02:17.932278717+0700 -----
-Cmd line: system_server
-Build fingerprint: 'Xiaomi/houji_global/houji:14/UKQ1.230804.001/V816.0.12.0.UNCMIXM:user/release-keys'
-ABI: 'arm64'
-Build type: optimized
-suspend all histogram:	Sum: 31.260ms 99% C.I. 1.409us-8870.400us Avg: 318.979us Max: 10687us
-DALVIK THREADS (304):
-"ReferenceQueueDaemon" daemon prio=5 tid=5 Waiting
-    | group="system" sCount=1 ucsCount=0 flags=1 obj=0x12c02270 self=0xb400007ad4d07000
-    | sysTid=2281 nice=4 cgrp=foreground sched=0/0 handle=0x7aeed48cb0
-    | state=S schedstat=( 284481155 205167089 734 ) utm=6 stm=21 core=7 HZ=100
-    | stack=0x7aeec45000-0x7aeec47000 stackSize=1039KB
-    | held mutexes=
-    at java.lang.Object.wait(Native method)
-    - waiting on <0x037d6e4c> (a java.lang.Class<java.lang.ref.ReferenceQueue>)
-    at java.lang.Object.wait(Object.java:386)
-    at java.lang.Object.wait(Object.java:524)
-    at java.lang.Daemons$ReferenceQueueDaemon.runInternal(Daemons.java:247)
-    - locked <0x037d6e4c> (a java.lang.Class<java.lang.ref.ReferenceQueue>)
-    at java.lang.Daemons$Daemon.run(Daemons.java:145)
-    at java.lang.Thread.run(Thread.java:1012)
-
-"FinalizerDaemon" daemon prio=5 tid=7 Waiting
-    | group="system" sCount=1 ucsCount=0 flags=1 obj=0x12c02300 self=0xb400007ad4d08c00
-    | sysTid=2282 nice=4 cgrp=foreground sched=0/0 handle=0x7a8dda9cb0
-    | state=S schedstat=( 247375242 112008769 602 ) utm=10 stm=13 core=2 HZ=100
-    | stack=0x7a8dca6000-0x7a8dca8000 stackSize=1039KB
-    | held mutexes=
-    at java.lang.Object.wait(Native method)
-    - waiting on <0x0ecb4e95> (a java.lang.Object)
-    at java.lang.Object.wait(Object.java:386)
-    at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:210)
-    - locked <0x0ecb4e95> (a java.lang.Object)
-    at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:231)
-    at java.lang.Daemons$FinalizerDaemon.runInternal(Daemons.java:317)
-    at java.lang.Daemons$Daemon.run(Daemons.java:145)
-    at java.lang.Thread.run(Thread.java:1012)
-
-"""
-
-    # Parse the process information
-    # process_info = parse_process_info(thread_stack_content)
-    # print("Process Info:")
-    # print(process_info)
-    # print("-" * 40)
-
-    # # Parse the thread stack content
-    # threads, waiting_threads, holding_threads = parse_threads(thread_stack_content)
-
-    # # Display the lock contentions and thread details
-    # display_thread_and_lock_info(
-    #     process_info, threads, waiting_threads, holding_threads
-    # )
+            section_content = match.group(0) if match else ""
+            # print(type(section_content), len())
+            self.traces.append(AnrTrace.from_raw_str(section_content))
