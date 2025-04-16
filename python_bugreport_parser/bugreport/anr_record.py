@@ -25,6 +25,28 @@ LOCK_PATTERN = re.compile(
 )
 
 
+class AnrLockInfo:
+    def __init__(self):
+        self.lock_status: str = ""
+        self.lock_address: str = ""
+        self.lock_object: str = ""  # the object that is being waited on
+        self.holding_thread: List[AnrThread] = []  # threads holding the lock
+        self.waiting_thread: List[AnrThread] = []  # threads waiting for the lock
+
+
+class AnrThreadFrame:
+    def __init__(self):
+        self.function_name: str = ""
+
+
+class AnrThread:
+    def __init__(self):
+        self.frames: List[AnrThreadFrame] = []
+        self.metadata: Dict[str, str] = {}
+        self.thread_name: str = "unknown"
+        self.lock_info: List[AnrLockInfo] = []
+
+
 class AnrTrace:
     """
     Class to parse and analyze ANR (Application Not Responding) traces of a single process.
@@ -37,10 +59,9 @@ class AnrTrace:
         self.cmd_line: str = ""
         self.build_fingerprint: str = ""
         self.abi: str = ""
-        self.build_type: str = ""
         self.waiting_threads: Dict[str, List[str]] = defaultdict(list)
         self.holding_threads: Dict[str, List[str]] = defaultdict(list)
-        self.threads: List[dict] = []
+        self.threads: List[AnrThread] = []
 
     def __str__(self):
         return (
@@ -49,7 +70,6 @@ class AnrTrace:
             f"cmd_line: {self.cmd_line}\n"
             f"build_fingerprint: {self.build_fingerprint}\n"
             f"abi: {self.abi}\n"
-            f"build_type: {self.build_type}\n"
             f"waiting_threads: {self.waiting_threads}\n"
             f"holding_threads: {self.holding_threads}\n"
             f"threads: {self.threads}\n"
@@ -63,7 +83,6 @@ class AnrTrace:
             "cmd_line": self.cmd_line,
             "build_fingerprint": self.build_fingerprint,
             "abi": self.abi,
-            "build_type": self.build_type,
         }
 
     @classmethod
@@ -95,7 +114,7 @@ class AnrTrace:
 
     # Function to parse all threads and lock contentions
     def parse_threads(self, file_content: str) -> None:
-        print(f"is_valid: {self.is_valid}")
+        # print(f"is_valid: {self.is_valid}")
         if not self.is_valid:
             lines = file_content.strip().split("\n")
             for line in lines:
