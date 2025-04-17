@@ -1,9 +1,18 @@
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 from pathlib import Path
-import re
-from typing import List
+from typing import Dict, List, Optional
+
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import pandas as pd
+
+THERMAL_LOG_PATTERN = re.compile(
+    r"(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2})\[(?P<tag>[^\]]+)\]\[VIRTUAL-SENSOR-FORMULA (?P<temperature>\d+)\] \{\s*(?P<kv_pairs>(\[[^\[\]]+\]\s*)+)\}"
+)
+
+THERMAL_KV_PATTERN = re.compile(r"\[(?P<key>[^\[\] ]+)\s+(?P<value>[^\[\] ]+)\]")
 
 
 @dataclass
@@ -23,9 +32,10 @@ class MiniDumpRecord:
         """
         # Example parsing logic (to be customized based on actual data format)
         # print("data", data, "data type", type(data))
-        if not data.strip():
+        if not data.strip() or data.find("|") == -1:
             return None
         # Assuming the data format is "version_index|timestamp|crash_reason|crash_details"
+        print(data)
         version_index, timestamp_str, crash_reason, crash_details = data.split("|")
         index, version = version_index.split(" ")
 
@@ -52,6 +62,50 @@ class MiniDumpRecord:
         )
 
 
+@dataclass
+class ThermalRecord:
+    """
+    Class to represent a thermal record.
+    """
+
+    timestamp: datetime = field(default_factory=datetime.now)
+    tag: str = ""
+    temperatures: Dict[str, int] = field(default_factory=dict)
+
+    def __str__(self):
+        """
+        Return a string representation of the ThermalRecord object.
+
+        :return: String representation of the object.
+        """
+        return (
+            f"ThermalRecord(timestamp={self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}, "
+            f"tag={self.tag})"
+        )
+
+    @classmethod
+    def parse(cls, line: str) -> Optional["ThermalRecord"]:
+        match = THERMAL_LOG_PATTERN.match(line)
+        if not match:
+            return None
+
+        instance = cls()
+        instance.tag = match.group("tag")
+        instance.timestamp = datetime.strptime(
+            match.group("timestamp"), "%m-%d %H:%M:%S"
+        )
+        instance.temperatures = dict()
+        instance.temperatures["virtual_sensor"] = int(match.group("temperature"))
+
+        kv_pairs_str = match.group("kv_pairs")
+        for kv_match in THERMAL_KV_PATTERN.finditer(kv_pairs_str):
+            key = kv_match.group("key")
+            value = int(kv_match.group("value"))  # Assume all values are integers
+            instance.temperatures[key] = value
+
+        return instance
+
+
 class DumpstateBoard:
     """
     Class to represent the dumpstate board information.
@@ -66,7 +120,7 @@ class DumpstateBoard:
         self.sections: List[str] = []
         self.mini_dump_records: List[MiniDumpRecord] = []
         self.kernel_log: str = ""
-        self.temperature: str = ""
+        self.temperature_log: List[ThermalRecord] = []
 
     def __repr__(self):
         """
@@ -82,16 +136,7 @@ class DumpstateBoard:
 
         :param dumpstate_board_dir: Path to the dumpstate board directory.
         """
-        # Assuming the data is in a file named 'dumpstate_board.txt'
-        # if dumpstate_board_path.exists():
-        #     with open(
-        #         dumpstate_board_path, "r", encoding="utf-8", errors="ignore"
-        #     ) as file:
-        #         self.data = file.read()
-        # else:
-        #     raise FileNotFoundError(
-        #         f"Dumpstate board file not found: {dumpstate_board_path}"
-        #     )
+
         pattern = re.compile(r"^------ ([\w ]+) \(.*\)")
         sections = []
         current_name = None
@@ -107,6 +152,8 @@ class DumpstateBoard:
                         sections.append((current_name, current_content))
                         if current_name == "minidump history":
                             self.parse_minidump_history(current_content)
+                        elif current_name == "THERMAL DUMP LOG":
+                            self.parse_thermal_log(current_content)
                         current_content = []
                     current_name = match.group(1)
                 else:
@@ -125,3 +172,42 @@ class DumpstateBoard:
             parsed_record = MiniDumpRecord.parse(record)
             if parsed_record:
                 self.mini_dump_records.append(parsed_record)
+
+    def parse_thermal_log(self, current_content) -> None:
+        """
+        Parse the thermal log from the loaded data.
+        """
+        for line in current_content:
+            parsed_record = ThermalRecord.parse(line)
+            if parsed_record:
+                self.temperature_log.append(parsed_record)
+
+    def draw_temp_graph(self) -> None:
+        x_data = [
+            record.timestamp
+            for record in self.temperature_log
+            if record.tag == "SS-CPU0"
+        ]
+        y_data = [
+            record.temperatures["virtual_sensor"]
+            for record in self.temperature_log
+            if record.tag == "SS-CPU0"
+        ]
+
+        _, ax = plt.subplots(figsize=(10, 4))
+
+        # Plotting
+        ax.scatter(x_data, y_data)
+
+        # Set formatter for x-axis
+        date_format = mdates.DateFormatter("%m-%d %H:%M:%S")
+        ax.xaxis.set_major_formatter(date_format)
+        ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=240))
+
+        plt.grid(True)
+        plt.title("Thermal Log")
+        plt.xlabel("Time")
+        plt.ylabel("Temperature")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig("temp.png")
