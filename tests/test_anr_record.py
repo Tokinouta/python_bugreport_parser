@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from python_bugreport_parser.bugreport.anr_record import AnrRecord, AnrTrace
+from python_bugreport_parser.bugreport.anr_record import AnrRecord, AnrProcess
 
 
 class TestAnrRecord(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestAnrRecord(unittest.TestCase):
                     trace.display_thread_and_lock_info()
 
 
-class TestAnrTrace(unittest.TestCase):
+class TestAnrProcess(unittest.TestCase):
     def setUp(self):
         self.thread_stack_content = """----- pid 2270 at 2024-08-16 10:02:17.932278717+0700 -----
 Cmd line: system_server
@@ -64,6 +64,6 @@ DALVIK THREADS (304):
 """
 
     def test_anr_trace(self):
-        anr_trace = AnrTrace.from_raw_str(self.thread_stack_content)
+        anr_trace = AnrProcess.from_raw_str(self.thread_stack_content)
         print(str(anr_trace))
         anr_trace.display_thread_and_lock_info()
