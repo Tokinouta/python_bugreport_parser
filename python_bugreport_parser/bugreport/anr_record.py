@@ -100,6 +100,22 @@ class AnrThread:
 class AnrProcess:
     """
     Class to parse and analyze ANR (Application Not Responding) traces of a single process.
+
+    Attributes:
+        is_valid (bool): Indicates whether the ANR trace is valid.
+        pid (int): The process ID.
+        timestamp (datetime): The timestamp of the ANR event.
+        cmd_line (str): The command line used to start the process.
+        build_fingerprint (str): The build fingerprint of the device.
+        abi (str): The ABI (Application Binary Interface) of the device.
+        threads (List[AnrThread]): A list of threads involved in the ANR event.
+        lock_info (Dict[str, AnrLockInfo]): A dictionary containing lock information for each lock.
+
+    Actually, there is another special case where the ANR trace is invalid, but since it contains
+    no valid stack traces, it will be ignored.
+    ---- pid 518 at [unknown] ----
+    Dump skipped for cached process.
+    ---- end 518 ----
     """
 
     def __init__(self):

@@ -5,6 +5,7 @@ from python_bugreport_parser.bugreport.section import (
     DumpsysSection,
     LogcatSection,
     SystemPropertySection,
+    AnrRecordSection,
     OtherSection,
     LogcatLine,
     DumpsysEntry

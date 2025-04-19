@@ -8,6 +8,7 @@ from python_bugreport_parser.bugreport.section import (
     SECTION_BEGIN,
     SECTION_BEGIN_NO_CMD,
     SECTION_END,
+    AnrRecordSection,
     DumpsysSection,
     LogcatSection,
     OtherSection,
@@ -64,6 +65,16 @@ class BugreportTxt:
                 # skip BLOCK STAT, since this is not a beginning of a section
                 if group == "BLOCK STAT":
                     continue
+                # For these sections without an ending line
+                if group != section_start[0]:
+                    if section_start[1] != -1:
+                        self._create_and_add_section(
+                            name=section_start[0],
+                            start_line=section_start[1],
+                            end_line=line_num - 1,
+                            lines=current_section_lines,
+                        )
+                    current_section_lines = []
 
                 section_start = group, line_num
             else:
@@ -81,6 +92,8 @@ class BugreportTxt:
             section_content = DumpsysSection()
         elif name == "SYSTEM PROPERTIES":
             section_content = SystemPropertySection()
+        elif "VM TRACES" in name:
+            section_content = AnrRecordSection()
         else:
             section_content = OtherSection()
 

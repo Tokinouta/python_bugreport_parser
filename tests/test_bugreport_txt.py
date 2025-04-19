@@ -13,6 +13,7 @@ from python_bugreport_parser.bugreport import (
     LogcatSection,
     OtherSection,
     SystemPropertySection,
+    AnrRecordSection,
 )
 
 
@@ -48,7 +49,7 @@ class TestBugreport(unittest.TestCase):
 
         # There are still invalid sections, but just ignore them for now
         # They won't cause issues in our analysis
-        self.assertEqual(len(self.bugreport.sections), 145)
+        self.assertEqual(len(self.bugreport.sections), 148)
 
         # Find sections by type
         system_log = next(
@@ -80,7 +81,6 @@ class TestBugreport(unittest.TestCase):
             None,
         )
         self.assertIsInstance(other.content, OtherSection)
-
 
         system_log_sections = [
             s for s in self.bugreport.sections if s.name == "SYSTEM LOG"
@@ -120,3 +120,9 @@ class TestBugreport(unittest.TestCase):
         self.assertEqual(
             len(system_props.content.properties), system_props.get_line_numbers() - 3
         )
+
+        # Test ANR record section
+        anr_records = [s for s in self.bugreport.sections if "VM TRACES" in s.name]
+        self.assertEqual(len(anr_records), 2)
+        for record in anr_records:
+            self.assertIsInstance(record.content, AnrRecordSection)

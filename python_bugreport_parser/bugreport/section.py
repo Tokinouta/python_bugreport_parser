@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+from python_bugreport_parser.bugreport.anr_record import AnrRecord
 from python_bugreport_parser.bugreport.dumpsys_entry import (
     MqsServiceDumpsysEntry,
     DumpsysEntry,
@@ -154,6 +155,14 @@ class SystemPropertySection(SectionContent):
         lines_concated = "\n".join(lines)
         for match in SYSTEM_PROPERTY_REGEX.finditer(lines_concated):
             self.properties[match.group(1)] = match.group(2)
+
+
+class AnrRecordSection(SectionContent):
+    def __init__(self):
+        self.record: AnrRecord = AnrRecord()
+
+    def parse(self, lines: List[str], year: int) -> None:
+        self.record.split_anr_trace("\n".join(lines))
 
 
 class OtherSection(SectionContent):
