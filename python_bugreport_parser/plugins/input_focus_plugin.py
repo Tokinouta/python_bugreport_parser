@@ -75,6 +75,18 @@ class InputFocusTuple:
         """Check if event can be added to this tuple"""
         if getattr(self, event.event_type) is not None:
             return False
+        if event.event_type == "request" and (
+            self.receive is not None
+            or self.entering is not None
+            or self.leaving is not None
+        ):
+            return False
+        if event.event_type == "receive" and (
+            self.entering is not None or self.leaving is not None
+        ):
+            return False
+        if event.event_type == "entering" and (self.leaving is not None):
+            return False
         return event.timestamp >= self.latest_timestamp
 
     def add_event(self, event: FocusEvent):
