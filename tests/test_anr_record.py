@@ -11,7 +11,7 @@ class TestAnrRecord(unittest.TestCase):
         anr_record = AnrRecord()
         with open(anr_record_path, "r", encoding="utf-8") as f:
             anrfile_content = f.read()
-            anr_record.split_anr_trace(anrfile_content)
+            anr_record._split_anr_trace(anrfile_content)
             # print(anr_record.type)
             for trace in anr_record.traces:
                 if trace.cmd_line == "system_server":

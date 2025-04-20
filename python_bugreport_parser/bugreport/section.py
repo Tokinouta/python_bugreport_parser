@@ -162,7 +162,7 @@ class AnrRecordSection(SectionContent):
         self.record: AnrRecord = AnrRecord()
 
     def parse(self, lines: List[str], year: int) -> None:
-        self.record.split_anr_trace("\n".join(lines))
+        self.record._split_anr_trace("\n".join(lines))
 
 
 class OtherSection(SectionContent):

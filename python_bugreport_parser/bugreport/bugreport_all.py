@@ -5,6 +5,7 @@ from typing import List
 import zipfile
 import tomllib  # or import tomli as tomllib for older versions
 
+from python_bugreport_parser.bugreport.anr_record import AnrRecord
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
 
@@ -44,9 +45,9 @@ class BugreportDirs:
 class Bugreport:
     def __init__(self):
         self.bugreport_txt: BugreportTxt = None
-        self.anr_files: List[str] = []
+        self.anr_records: List[AnrRecord] = []
         self.miuilog_reboots: List[str] = []
-        self.miuilog_scouts: List[str] = []
+        self.miuilog_scouts: List[AnrRecord] = []
         self.dumpstate_board: DumpstateBoard = None
 
     @classmethod
@@ -154,13 +155,15 @@ class Bugreport:
             ):
                 for zip_file in os.listdir(scout_app_dir):
                     print(zip_file)
-                    bugreport_dirs.miuilog_scout_dirs.append(scout_app_dir / zip_file)
+                    if os.path.isdir(scout_app_dir / zip_file):
+                        bugreport_dirs.miuilog_scout_dirs.append(scout_app_dir / zip_file)
             if (scout_sys_dir := scout_mqs_dir / "sys") and os.path.isdir(
                 scout_sys_dir
             ):
                 for zip_file in os.listdir(scout_sys_dir):
                     print(zip_file)
-                    bugreport_dirs.miuilog_scout_dirs.append(scout_sys_dir / zip_file)
+                    if os.path.isdir(scout_sys_dir / zip_file):
+                        bugreport_dirs.miuilog_scout_dirs.append(scout_sys_dir / zip_file)
             if (scout_watchdog_dir := scout_mqs_dir / "watchdog") and os.path.isdir(
                 scout_watchdog_dir
             ):
@@ -178,12 +181,19 @@ class Bugreport:
     def load(self, bugreport_dirs: BugreportDirs):
         self.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt_path)
         self.bugreport_txt.load()
-        self.anr_files = bugreport_dirs.anr_files
+        for file in bugreport_dirs.anr_files:
+            anr_record = AnrRecord()
+            anr_record.load(file)
+            self.anr_records.append(anr_record)
         self.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
-        self.miuilog_scouts = bugreport_dirs.miuilog_scout_dirs
+        for file in bugreport_dirs.miuilog_scout_dirs:
+            anr_record = AnrRecord()
+            anr_record.load(file)
+            self.miuilog_scouts.append(anr_record)
         if bugreport_dirs.dumpstate_board_path:
             self.dumpstate_board = DumpstateBoard()
             self.dumpstate_board.load(bugreport_dirs.dumpstate_board_path)
         else:
             print("No dumpstate board file found")
         print("Loaded bugreport:", self)
+        # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))

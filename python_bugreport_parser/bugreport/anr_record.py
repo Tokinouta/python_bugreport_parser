@@ -1,10 +1,10 @@
 import re
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 from dateutil.parser import isoparse
-
 
 SECTION_PATTERN = re.compile(  # Regex pattern to match each section, including the delimiter lines
     r"----- (pid \d+|Waiting Channels: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
@@ -299,11 +299,33 @@ class AnrRecord:
         self.type = ""  # ANR, scout hang, scout warning
         self.traces: List[AnrProcess] = []
 
+    def load(self, path: Path) -> None:
+        record_file = path
+        print(str(path.absolute()))
+        if "scout" in str(path.absolute()):
+            # find the file with name containing "self-trace"
+            for file in path.glob("*"):
+                if "self-trace" in file.name:
+                    record_file = file
+                    break
+            else:
+                print("No self-trace file found")
+                return
+        print(record_file)
+        if "SCOUT" in record_file.name:
+            self.type = "SCOUT"
+        else:
+            self.type = "ANR"
+
+        with open(record_file, "r", encoding="utf-8", errors="ignore") as f:
+            file_content = f.read()
+            self._split_anr_trace(file_content)
+
     # Function to split the ANR trace file into sections based on the given pattern
     # TODO: add a function that can gather all the traces of a single process
     #  across multiple ANR traces, thus providing a more comprehensive view of
     #  the process's state by tracing across time.
-    def split_anr_trace(self, file_content):
+    def _split_anr_trace(self, file_content):
         # Collect the matched sections
         for match in SECTION_PATTERN.finditer(file_content):
             # Append the section as a whole (including delimiter lines)
