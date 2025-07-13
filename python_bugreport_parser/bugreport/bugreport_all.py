@@ -17,12 +17,18 @@ extract_path = Path(config["extract_path"])
 
 
 def unzip_and_delete(zip_file: Path, unzip_dir: Path):
+    os.makedirs(unzip_dir, exist_ok=True)
     try:
         with zipfile.ZipFile(zip_file, "r") as zip_ref:
             zip_ref.extractall(unzip_dir)
         os.remove(zip_file)
     except (zipfile.BadZipFile, PermissionError, FileNotFoundError) as e:
         print(f"Error processing {zip_file}: {e}")
+
+
+# def extract(unzip_dir: Path, zip_file: Path) -> None:
+#     os.makedirs(unzip_dir, exist_ok=True)
+#     unzip_and_delete(zip_file, unzip_dir)
 
 
 class BugreportDirs:
@@ -43,6 +49,12 @@ class BugreportDirs:
 
 
 class Bugreport:
+    """
+    A class to parse and handle (zipped) bugreport.
+    The bugreport is expected to be exported by `adb bugreport`.
+    It extracts necessary files from a bug report zip, loads them into memory.
+    """
+
     def __init__(self):
         self.bugreport_txt: BugreportTxt = None
         self.anr_records: List[AnrRecord] = []
@@ -52,31 +64,22 @@ class Bugreport:
 
     @classmethod
     def from_zip(cls, bugreport_zip_path: Path, feedback_id: str) -> "Bugreport":
-        bugreport = cls()
         feedback_dir = extract_path / str(feedback_id)
-        Bugreport.extract(
-            feedback_dir=feedback_dir,
-            bugreport_zip_path=bugreport_zip_path,
+        unzip_and_delete(
+            zip_file=bugreport_zip_path,
+            unzip_dir=feedback_dir,
         )
-        bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
-        bugreport.load(bugreport_dirs)
-        return bugreport
+        return Bugreport.from_dir(feedback_dir)
 
     @classmethod
-    def from_dir(cls, feedback_id: str) -> "Bugreport":
+    def from_dir(cls, feedback_dir: Path) -> "Bugreport":
         bugreport = cls()
-        feedback_dir = extract_path / str(feedback_id)
         bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
         bugreport.load(bugreport_dirs)
         return bugreport
 
     @staticmethod
-    def extract(feedback_dir: Path, bugreport_zip_path: Path) -> None:
-        os.makedirs(feedback_dir, exist_ok=True)
-        unzip_and_delete(bugreport_zip_path, feedback_dir)
-
-    @staticmethod
-    def load_required_file_paths(feedback_dir: Path) -> BugreportDirs:
+    def load_required_file_paths(bugreport_dir: Path) -> BugreportDirs:
         """
         Load the unzipped bugreport and gather some paths related to stability.
         Args:
@@ -84,21 +87,7 @@ class Bugreport:
         Returns:
             BugreportDirs: An object containing paths to the extracted directories.
         """
-
         bugreport_dirs = BugreportDirs()
-        bugreport_dir = feedback_dir / "bugreport"
-        print(bugreport_dir)
-
-        # Unzip the bugreport if not extracted
-        bugreport_zip_path = next(
-            iter(glob.glob(str(feedback_dir / "bugreport*.zip"))), None
-        )
-        if not bugreport_zip_path:
-            print("No bugreport*.zip file found")
-        else:
-            print(bugreport_dir, bugreport_zip_path)
-            os.makedirs(bugreport_dir, exist_ok=True)
-            unzip_and_delete(bugreport_zip_path, bugreport_dir)
 
         # Find bugreport txt file
         bugreport_txt_path = next(
@@ -156,14 +145,18 @@ class Bugreport:
                 for zip_file in os.listdir(scout_app_dir):
                     print(zip_file)
                     if os.path.isdir(scout_app_dir / zip_file):
-                        bugreport_dirs.miuilog_scout_dirs.append(scout_app_dir / zip_file)
+                        bugreport_dirs.miuilog_scout_dirs.append(
+                            scout_app_dir / zip_file
+                        )
             if (scout_sys_dir := scout_mqs_dir / "sys") and os.path.isdir(
                 scout_sys_dir
             ):
                 for zip_file in os.listdir(scout_sys_dir):
                     print(zip_file)
                     if os.path.isdir(scout_sys_dir / zip_file):
-                        bugreport_dirs.miuilog_scout_dirs.append(scout_sys_dir / zip_file)
+                        bugreport_dirs.miuilog_scout_dirs.append(
+                            scout_sys_dir / zip_file
+                        )
             if (scout_watchdog_dir := scout_mqs_dir / "watchdog") and os.path.isdir(
                 scout_watchdog_dir
             ):
@@ -197,3 +190,61 @@ class Bugreport:
             print("No dumpstate board file found")
         print("Loaded bugreport:", self)
         # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))
+
+
+class Log284:
+    """
+    A class to handle log284 files.
+    This is a zipped log file whose content is defined by an internal structure.
+    It mainly contains the standard bugreport and mtdoops.md, which are essential for debugging.
+    The log284 file is expected to be exported by secret code 284.
+    """
+
+    def __init__(self):
+        self.bugreport: Bugreport = None
+        self.mtdoops_md: str = ""
+
+    @classmethod
+    def from_zip(cls, log284_zip_path: Path, feedback_id: str) -> "Log284":
+        feedback_dir = extract_path / str(feedback_id)
+        unzip_and_delete(
+            unzip_dir=feedback_dir,
+            zip_file=log284_zip_path,
+        )
+        return Log284.from_dir(feedback_dir)
+
+    @classmethod
+    def from_dir(cls, feedback_dir: Path) -> "Log284":
+        log284 = cls()
+        bugreport_dirs = Log284.load_required_file_paths(feedback_dir)
+        log284.bugreport = Bugreport()
+        log284.bugreport.load(bugreport_dirs)
+        mtdoops_md_path = feedback_dir / "mtdoops.md"
+        if mtdoops_md_path.exists():
+            with open(mtdoops_md_path, "r") as f:
+                log284.mtdoops_md = f.read()
+        return log284
+
+    @staticmethod
+    def load_required_file_paths(feedback_dir: Path) -> BugreportDirs:
+        """
+        Load the unzipped 284 log and gather some paths related to stability.
+        Args:
+            feedback_dir (Path): Path to the unzipped 284 log.
+        Returns:
+            BugreportDirs: An object containing paths to the extracted directories.
+        """
+        bugreport_dir = feedback_dir / "bugreport"
+        print(bugreport_dir)
+
+        # Unzip the bugreport if not extracted
+        bugreport_zip_path = next(
+            iter(glob.glob(str(feedback_dir / "bugreport*.zip"))), None
+        )
+        if not bugreport_zip_path:
+            print("No bugreport*.zip file found")
+        else:
+            print(bugreport_dir, bugreport_zip_path)
+            unzip_and_delete(zip_file=bugreport_zip_path, unzip_dir=bugreport_dir)
+
+        return Bugreport.load_required_file_paths(bugreport_dir)
