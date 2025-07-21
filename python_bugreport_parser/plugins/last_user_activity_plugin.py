@@ -67,7 +67,7 @@ class LastUserActivityPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
         if not event_log:
             # call the parent class analyze method

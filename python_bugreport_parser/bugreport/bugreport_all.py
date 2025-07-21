@@ -3,17 +3,10 @@ import os
 from pathlib import Path
 from typing import List
 import zipfile
-import tomllib  # or import tomli as tomllib for older versions
 
 from python_bugreport_parser.bugreport.anr_record import AnrRecord
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
-
-
-CONFIG_PATH = Path(__file__).parent.parent.parent / "config/config.toml"
-with open(CONFIG_PATH, "rb") as f:
-    config = tomllib.load(f)
-extract_path = Path(config["extract_path"])
 
 
 def unzip_and_delete(zip_file: Path, unzip_dir: Path):
@@ -26,11 +19,6 @@ def unzip_and_delete(zip_file: Path, unzip_dir: Path):
         print(f"Error processing {zip_file}: {e}")
 
 
-# def extract(unzip_dir: Path, zip_file: Path) -> None:
-#     os.makedirs(unzip_dir, exist_ok=True)
-#     unzip_and_delete(zip_file, unzip_dir)
-
-
 class BugreportDirs:
     def __init__(self):
         self.bugreport_txt_path = Path()
@@ -38,13 +26,22 @@ class BugreportDirs:
         self.miuilog_reboot_dirs: List[Path] = []
         self.miuilog_scout_dirs: List[Path] = []
         self.dumpstate_board_path: Path = Path()
+        self.mtdoops_md_path: Path = Path()
 
     def __str__(self):
         return (
             f"BugreportDirs(bugreport_txt={self.bugreport_txt_path}, \n"
             f"anr_files={self.anr_files}, \n"
             f"miuilog_reboot_dir={self.miuilog_reboot_dirs}, \n"
-            f"miuilog_scout_dir={self.miuilog_scout_dirs})"
+            f"miuilog_scout_dir={self.miuilog_scout_dirs}), \n"
+            f"dumpstate_board_path={self.dumpstate_board_path}, \n"
+            f"mtdoops_md_path={self.mtdoops_md_path})"
+        )
+    
+    def is_valid(self) -> bool:
+        return (
+            self.bugreport_txt_path.exists() and
+            self.dumpstate_board_path.exists()
         )
 
 
@@ -63,8 +60,7 @@ class Bugreport:
         self.dumpstate_board: DumpstateBoard = None
 
     @classmethod
-    def from_zip(cls, bugreport_zip_path: Path, feedback_id: str) -> "Bugreport":
-        feedback_dir = extract_path / str(feedback_id)
+    def from_zip(cls, bugreport_zip_path: Path, feedback_dir: str) -> "Bugreport":
         unzip_and_delete(
             zip_file=bugreport_zip_path,
             unzip_dir=feedback_dir,
@@ -124,7 +120,6 @@ class Bugreport:
         if os.path.isdir(reboot_mqs_dir):
             # Unzip all zip files in this folder
             for zip_file in glob.glob(str(reboot_mqs_dir / "*.zip")):
-                print(zip_file)
                 extract_dir = os.path.splitext(zip_file)[0]
                 os.makedirs(extract_dir, exist_ok=True)
                 unzip_and_delete(zip_file, extract_dir)
@@ -205,8 +200,7 @@ class Log284:
         self.mtdoops_md: str = ""
 
     @classmethod
-    def from_zip(cls, log284_zip_path: Path, feedback_id: str) -> "Log284":
-        feedback_dir = extract_path / str(feedback_id)
+    def from_zip(cls, log284_zip_path: Path, feedback_dir: str) -> "Log284":
         unzip_and_delete(
             unzip_dir=feedback_dir,
             zip_file=log284_zip_path,
@@ -216,12 +210,19 @@ class Log284:
     @classmethod
     def from_dir(cls, feedback_dir: Path) -> "Log284":
         log284 = cls()
+
+        if isinstance(feedback_dir, str):
+            feedback_dir = Path(feedback_dir)
         bugreport_dirs = Log284.load_required_file_paths(feedback_dir)
+        if not bugreport_dirs:
+            print("Invalid bugreport directories, some files are missing")
+            return None
+
         log284.bugreport = Bugreport()
         log284.bugreport.load(bugreport_dirs)
         mtdoops_md_path = feedback_dir / "mtdoops.md"
         if mtdoops_md_path.exists():
-            with open(mtdoops_md_path, "r") as f:
+            with open(mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
                 log284.mtdoops_md = f.read()
         return log284
 
@@ -247,4 +248,27 @@ class Log284:
             print(bugreport_dir, bugreport_zip_path)
             unzip_and_delete(zip_file=bugreport_zip_path, unzip_dir=bugreport_dir)
 
-        return Bugreport.load_required_file_paths(bugreport_dir)
+        paths = Bugreport.load_required_file_paths(bugreport_dir)
+        if not paths:
+            print("Invalid bugreport directories, some files are missing")
+            return None
+
+        mtdoops_md_path = bugreport_dir / "mtdoops.md"
+        if mtdoops_md_path.exists():
+            paths.mtdoops_md_path = mtdoops_md_path
+        else:
+            print("No mtdoops.md file found")
+
+        return paths
+
+    def load(self, bugreport_dirs: BugreportDirs):
+        """
+        Load the bugreport and mtdoops.md files.
+        Args:
+            bugreport_dirs (BugreportDirs): The directories containing the bugreport and mtdoops.md files.
+        """
+        self.bugreport.load(bugreport_dirs)
+        mtdoops_md_path = bugreport_dirs.bugreport_txt_path.parent / "mtdoops.md"
+        if mtdoops_md_path.exists():
+            with open(mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
+                self.mtdoops_md = f.read()

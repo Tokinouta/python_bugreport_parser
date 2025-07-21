@@ -20,7 +20,7 @@ class FocusRecentsPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         error_timestamp = bugreport.error_timestamp
 
         focus_records: List[InputFocusTuple] = None

@@ -17,7 +17,7 @@ class TimestampPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         self.timestamp = bugreport.metadata.timestamp
         return PluginResult(
             self.timestamp, metadata={"description": "Bugreport timestamp"}

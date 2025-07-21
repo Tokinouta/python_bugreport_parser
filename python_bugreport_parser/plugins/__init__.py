@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from python_bugreport_parser.bugreport.bugreport_all import Bugreport
+from python_bugreport_parser.bugreport.bugreport_all import Bugreport, Log284
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class PluginResult:
 
 class BugreportAnalysisContext:
     def __init__(self):
-        self.bugreport: Bugreport = None
+        self.bugreport: Log284 = None
 
         # The analysis, not only the reports strings
         self.results: Dict[PluginResult] = {}

@@ -18,6 +18,9 @@ from python_bugreport_parser.bugreport.section import (
 
 
 class BugreportTxt:
+    """
+    A class to represent the bugreport.txt file and its contents.
+    """
     def __init__(self, path: Path):
         self.raw_file = self._mmap_file(path)
         self.metadata = Metadata()

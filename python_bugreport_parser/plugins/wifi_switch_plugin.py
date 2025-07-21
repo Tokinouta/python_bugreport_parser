@@ -23,7 +23,7 @@ class WifiSwitchPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport_txt: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport_txt: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
 
         dumpsys = next((s for s in bugreport_txt.sections if s.name == "DUMPSYS"), None)
         wifi_dumpsys: DumpsysEntry = next(

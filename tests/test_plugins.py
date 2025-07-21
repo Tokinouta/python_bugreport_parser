@@ -46,7 +46,7 @@ class TestInputFocusPlugin(unittest.TestCase):
         self.event_log = next(
             (
                 s
-                for s in TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport_txt.sections
+                for s in TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport.bugreport_txt.sections
                 if s.name == "EVENT LOG"
             ),
             None,

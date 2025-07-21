@@ -18,7 +18,7 @@ class AnrDigestPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         # Extract all am_anr lines
         # Extract 'ANR in' segment and parse it
         # Match each 'ANR in' segment with the am_anr lines

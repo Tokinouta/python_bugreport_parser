@@ -24,7 +24,7 @@ class InvalidBugreportPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Extract timestamp from bugreport metadata"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         # find the result of TimestampPlugin from analysis_context.results
         result_from_timestamp_plugin = analysis_context.get_result("TimestampPlugin")
         if result_from_timestamp_plugin is None:

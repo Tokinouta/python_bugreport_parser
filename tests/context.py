@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from python_bugreport_parser.bugreport import BugreportTxt, dumpsys_entry
-from python_bugreport_parser.bugreport.bugreport_all import Bugreport
+from python_bugreport_parser.bugreport.bugreport_all import Bugreport, Log284
 from python_bugreport_parser.plugins import BugreportAnalysisContext
 
 dumpsys_entry.REBOOT_RECORD_START = (
@@ -34,5 +34,6 @@ def setup_bugreport_txt():
 
 TEST_BUGREPORT_TXT = setup_bugreport_txt()
 TEST_BUGREPORT_ANALYSIS_CONTEXT = BugreportAnalysisContext()
-TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport = Bugreport()
-TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport_txt = TEST_BUGREPORT_TXT
+TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport = Log284()
+TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport = Bugreport()
+TEST_BUGREPORT_ANALYSIS_CONTEXT.bugreport.bugreport.bugreport_txt = TEST_BUGREPORT_TXT

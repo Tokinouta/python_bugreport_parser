@@ -30,7 +30,7 @@ class RebootPlugin(BasePlugin):
             None,
         )
         reboot_records = mqs_dumpsys.boot_records
-        minidump_records = analysis_context.bugreport.dumpstate_board.mini_dump_records
+        minidump_records = analysis_context.bugreport.bugreport.dumpstate_board.mini_dump_records
         augmented = []
         for minidump_record in minidump_records:
             min_index, min_time_diff = -1, 10000000000

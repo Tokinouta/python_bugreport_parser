@@ -119,7 +119,7 @@ class InputFocusPlugin(BasePlugin):
 
     def analyze(self, analysis_context: BugreportAnalysisContext) -> PluginResult:
         """Main analysis entry point"""
-        bugreport: BugreportTxt = analysis_context.bugreport.bugreport_txt
+        bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         event_log = next((s for s in bugreport.sections if s.name == "EVENT LOG"), None)
         if not event_log:
             raise ValueError("EVENT LOG section not found")
