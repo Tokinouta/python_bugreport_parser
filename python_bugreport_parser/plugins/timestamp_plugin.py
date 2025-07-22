@@ -19,10 +19,10 @@ class TimestampPlugin(BasePlugin):
         """Extract timestamp from bugreport metadata"""
         bugreport: BugreportTxt = analysis_context.bugreport.bugreport.bugreport_txt
         self.timestamp = bugreport.metadata.timestamp
+        print(f"Analyzed timestamps: {self.timestamp}")
         return PluginResult(
             self.timestamp, metadata={"description": "Bugreport timestamp"}
         )
-        # print(f"Analyzed timestamps: {self.timestamp}")
 
     def report(self) -> str:
         # Bugreport timestamp: 2024-08-16T10:02:11

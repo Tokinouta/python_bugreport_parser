@@ -179,12 +179,14 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
     ) -> LocalRebootRecord:
         result = []
         temp_record = LocalRebootRecord()
-        for line in lines:
+        for i, line in enumerate(lines):
             # print(line)
             if BEGIN_OF_NEXT_SECTION.match(line):
                 break
 
             if line == "------------------------------------":
+                if i > 0 and lines[i - 1] == line:
+                    continue
                 result.append(temp_record)
                 temp_record = LocalRebootRecord()
             elif line.startswith("kernel reboot") or line.startswith("miui reboot"):

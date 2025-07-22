@@ -30,12 +30,17 @@ class WifiSwitchPlugin(BasePlugin):
             (s for s in dumpsys.content.entries if s.name == "wifi"),
             None,
         )
+        if not wifi_dumpsys:
+            return PluginResult(
+                [], metadata={"description": "WifiSwitch"}
+            )
+
         for line in wifi_dumpsys.data.splitlines():
             if "setWifiEnabledInternal" in line:
                 self.switch_records.append(line)
 
         return PluginResult(
-            self.switch_records, metadata={"description": "RebootRecords"}
+            self.switch_records, metadata={"description": "WifiSwitch"}
         )
 
     def report(self) -> str:

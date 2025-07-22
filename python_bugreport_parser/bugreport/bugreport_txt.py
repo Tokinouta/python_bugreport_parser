@@ -43,6 +43,7 @@ class BugreportTxt:
     def load(self) -> None:
         lines = self._read_file()
         self.metadata.parse(lines)
+        self.set_error_timestamp(self.metadata.timestamp) # set a default error timestamp
 
         current_section_lines = []
         section_start = ("", -1)
