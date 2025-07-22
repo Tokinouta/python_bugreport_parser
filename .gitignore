@@ -91,3 +91,6 @@ ENV/
 
 # this is too big to directly include in the repo
 example.txt
+
+# browser cache
+browser_cache/
