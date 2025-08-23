@@ -2,22 +2,11 @@ import glob
 import os
 from pathlib import Path
 from typing import List
-import zipfile
 
 from python_bugreport_parser.bugreport.anr_record import AnrRecord
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
-
-
-def unzip_and_delete(zip_file: Path, unzip_dir: Path):
-    os.makedirs(unzip_dir, exist_ok=True)
-    try:
-        with zipfile.ZipFile(zip_file, "r") as zip_ref:
-            zip_ref.extractall(unzip_dir)
-        os.remove(zip_file)
-    except (zipfile.BadZipFile, PermissionError, FileNotFoundError) as e:
-        print(f"Error processing {zip_file}: {e}")
-
+from python_bugreport_parser.utils import unzip_and_delete
 
 class BugreportDirs:
     def __init__(self):
@@ -186,7 +175,8 @@ class Bugreport:
         print("Loaded bugreport:", self)
         # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))
 
-
+# TODO: WE ALSO NEED TO UNZIP mishght.zip
+# TODO: WE ALSO NEED TO ANALYSE OFFLINELOG
 class Log284:
     """
     A class to handle log284 files.

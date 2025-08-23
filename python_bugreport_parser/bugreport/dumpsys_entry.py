@@ -6,7 +6,7 @@ from typing import List, Optional
 REBOOT_RECORD_START = "---------- Abnormal reboot records ----------"
 # REBOOT_RECORD_START = "---------- kernel abnormal reboot records ----------"
 REBOOT_FRAMEWORK_START = "---------- VM reboot records ----------"
-REBOOT_KERNEL_START = "---------- kernel reboot records ----------"
+REBOOT_KERNEL_START = "---------- Kernel reboot records ----------"
 HANG_RECORD_START = "--------- System hang records ---------"
 # REBOOT_DETAIL_START = "----------- dgt and det match ---------"
 REBOOT_DETAIL_START = "--------dgt and det match--------"
@@ -162,6 +162,9 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         #       just focus on the reboots.
         # Now we can store the HANGs into LocalRebootRecord as a temporary solution
 
+        current_line_index = skip_to_next_section(
+            lines, REBOOT_KERNEL_START, current_line_index
+        )
         while current_line_index < len(lines):
             new_start = MqsServiceDumpsysEntry.parse_reboot_record(
                 lines, current_line_index, result.boot_records
