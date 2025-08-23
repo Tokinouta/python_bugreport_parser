@@ -210,7 +210,22 @@ class AnrProcess:
         for i, line in enumerate(lines):
             if (match := THREAD_NAME_PATTERN.match(line)) and match:
                 thread.name = match.group("thread_name")
+                line = line[len(thread.name) + 2:]
+                attr_temp = ""
                 for attr in line.split(" "):
+                    attr = attr.strip()
+                    if attr == "":
+                        continue
+
+                    # special case for attributes in parentheses
+                    if attr.startswith("("):
+                        attr_temp = attr
+                        continue
+                    elif attr.endswith(")"):
+                        attr = attr_temp + " " + attr
+                        attr_temp = ""
+
+                    print(attr)
                     if attr.find("=") >= 0:
                         key, val = attr.split("=")
                     else:
