@@ -6,6 +6,7 @@ from typing import List
 from python_bugreport_parser.bugreport.anr_record import AnrRecord
 from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
+from python_bugreport_parser.bugreport.interfaces import LogInterface
 from python_bugreport_parser.utils import unzip_and_delete
 
 class BugreportDirs:
@@ -34,7 +35,7 @@ class BugreportDirs:
         )
 
 
-class Bugreport:
+class Bugreport(LogInterface):
     """
     A class to parse and handle (zipped) bugreport.
     The bugreport is expected to be exported by `adb bugreport`.
@@ -42,6 +43,7 @@ class Bugreport:
     """
 
     def __init__(self):
+        self.bugreport_dirs: BugreportDirs = None
         self.bugreport_txt: BugreportTxt = None
         self.anr_records: List[AnrRecord] = []
         self.miuilog_reboots: List[str] = []
@@ -49,9 +51,9 @@ class Bugreport:
         self.dumpstate_board: DumpstateBoard = None
 
     @classmethod
-    def from_zip(cls, bugreport_zip_path: Path, feedback_dir: str) -> "Bugreport":
+    def from_zip(cls, zip_path: Path, feedback_dir: str) -> "Bugreport":
         unzip_and_delete(
-            zip_file=bugreport_zip_path,
+            zip_file=zip_path,
             unzip_dir=feedback_dir,
         )
         return Bugreport.from_dir(feedback_dir)
@@ -59,12 +61,32 @@ class Bugreport:
     @classmethod
     def from_dir(cls, feedback_dir: Path) -> "Bugreport":
         bugreport = cls()
-        bugreport_dirs = Bugreport.load_required_file_paths(feedback_dir)
-        bugreport.load(bugreport_dirs)
+        bugreport.bugreport_dirs = Bugreport._load_required_file_paths(feedback_dir)
+        bugreport.load()
         return bugreport
 
+    def load(self):
+        self.bugreport_txt = BugreportTxt(self.bugreport_dirs.bugreport_txt_path)
+        self.bugreport_txt.load()
+        for file in self.bugreport_dirs.anr_files:
+            anr_record = AnrRecord()
+            anr_record.load(file)
+            self.anr_records.append(anr_record)
+        self.miuilog_reboots = self.bugreport_dirs.miuilog_reboot_dirs
+        for file in self.bugreport_dirs.miuilog_scout_dirs:
+            anr_record = AnrRecord()
+            anr_record.load(file)
+            self.miuilog_scouts.append(anr_record)
+        if self.bugreport_dirs.dumpstate_board_path:
+            self.dumpstate_board = DumpstateBoard()
+            self.dumpstate_board.load(self.bugreport_dirs.dumpstate_board_path)
+        else:
+            print("No dumpstate board file found")
+        print("Loaded bugreport:", self)
+        # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))
+
     @staticmethod
-    def load_required_file_paths(bugreport_dir: Path) -> BugreportDirs:
+    def _load_required_file_paths(bugreport_dir: Path) -> BugreportDirs:
         """
         Load the unzipped bugreport and gather some paths related to stability.
         Args:
@@ -155,29 +177,9 @@ class Bugreport:
         print("Ready to return ", bugreport_dirs)
         return bugreport_dirs
 
-    def load(self, bugreport_dirs: BugreportDirs):
-        self.bugreport_txt = BugreportTxt(bugreport_dirs.bugreport_txt_path)
-        self.bugreport_txt.load()
-        for file in bugreport_dirs.anr_files:
-            anr_record = AnrRecord()
-            anr_record.load(file)
-            self.anr_records.append(anr_record)
-        self.miuilog_reboots = bugreport_dirs.miuilog_reboot_dirs
-        for file in bugreport_dirs.miuilog_scout_dirs:
-            anr_record = AnrRecord()
-            anr_record.load(file)
-            self.miuilog_scouts.append(anr_record)
-        if bugreport_dirs.dumpstate_board_path:
-            self.dumpstate_board = DumpstateBoard()
-            self.dumpstate_board.load(bugreport_dirs.dumpstate_board_path)
-        else:
-            print("No dumpstate board file found")
-        print("Loaded bugreport:", self)
-        # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))
-
 # TODO: WE ALSO NEED TO UNZIP mishght.zip
 # TODO: WE ALSO NEED TO ANALYSE OFFLINELOG
-class Log284:
+class Log284(LogInterface):
     """
     A class to handle log284 files.
     This is a zipped log file whose content is defined by an internal structure.
@@ -186,14 +188,15 @@ class Log284:
     """
 
     def __init__(self):
+        self.bugreport_dirs: BugreportDirs = None
         self.bugreport: Bugreport = None
         self.mtdoops_md: str = ""
 
     @classmethod
-    def from_zip(cls, log284_zip_path: Path, feedback_dir: str) -> "Log284":
+    def from_zip(cls, zip_path: Path, feedback_dir: str) -> "Log284":
         unzip_and_delete(
             unzip_dir=feedback_dir,
-            zip_file=log284_zip_path,
+            zip_file=zip_path,
         )
         return Log284.from_dir(feedback_dir)
 
@@ -203,21 +206,31 @@ class Log284:
 
         if isinstance(feedback_dir, str):
             feedback_dir = Path(feedback_dir)
-        bugreport_dirs = Log284.load_required_file_paths(feedback_dir)
+        bugreport_dirs = Log284._load_required_file_paths(feedback_dir)
         if not bugreport_dirs:
             print("Invalid bugreport directories, some files are missing")
             return None
+        log284.bugreport_dirs = bugreport_dirs
 
         log284.bugreport = Bugreport()
-        log284.bugreport.load(bugreport_dirs)
-        mtdoops_md_path = feedback_dir / "mtdoops.md"
-        if mtdoops_md_path.exists():
-            with open(mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
-                log284.mtdoops_md = f.read()
+        log284.bugreport.bugreport_dirs = bugreport_dirs
+        log284.load()
         return log284
 
+    def load(self) -> None:
+        """
+        Load the bugreport and mtdoops.md files.
+        Args:
+            bugreport_dirs (BugreportDirs): The directories containing the bugreport and mtdoops.md files.
+        """
+        self.bugreport.load()
+        mtdoops_md_path = self.bugreport_dirs.bugreport_txt_path.parent / "mtdoops.md"
+        if mtdoops_md_path.exists():
+            with open(mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
+                self.mtdoops_md = f.read()
+
     @staticmethod
-    def load_required_file_paths(feedback_dir: Path) -> BugreportDirs:
+    def _load_required_file_paths(feedback_dir: Path) -> BugreportDirs:
         """
         Load the unzipped 284 log and gather some paths related to stability.
         Args:
@@ -237,8 +250,9 @@ class Log284:
         else:
             print(bugreport_dir, bugreport_zip_path)
             unzip_and_delete(zip_file=bugreport_zip_path, unzip_dir=bugreport_dir)
+            # TODO: The bugreport may be corrupted
 
-        paths = Bugreport.load_required_file_paths(bugreport_dir)
+        paths = Bugreport._load_required_file_paths(bugreport_dir)
         if not paths:
             print("Invalid bugreport directories, some files are missing")
             return None
@@ -250,15 +264,3 @@ class Log284:
             print("No mtdoops.md file found")
 
         return paths
-
-    def load(self, bugreport_dirs: BugreportDirs):
-        """
-        Load the bugreport and mtdoops.md files.
-        Args:
-            bugreport_dirs (BugreportDirs): The directories containing the bugreport and mtdoops.md files.
-        """
-        self.bugreport.load(bugreport_dirs)
-        mtdoops_md_path = bugreport_dirs.bugreport_txt_path.parent / "mtdoops.md"
-        if mtdoops_md_path.exists():
-            with open(mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
-                self.mtdoops_md = f.read()

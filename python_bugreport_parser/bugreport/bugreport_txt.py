@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
+from python_bugreport_parser.bugreport.interfaces import LogInterface
 from python_bugreport_parser.bugreport.metadata import Metadata
 from python_bugreport_parser.bugreport.section import (
     SECTION_BEGIN,
@@ -17,10 +18,11 @@ from python_bugreport_parser.bugreport.section import (
 )
 
 
-class BugreportTxt:
+class BugreportTxt(LogInterface):
     """
     A class to represent the bugreport.txt file and its contents.
     """
+
     def __init__(self, path: Path):
         self.raw_file = self._mmap_file(path)
         self.metadata = Metadata()
@@ -39,6 +41,14 @@ class BugreportTxt:
 
     def get_sections(self) -> List[Section]:
         return self.sections
+
+    @classmethod
+    def from_zip(cls, zip_path: Path, feedback_dir: str) -> "BugreportTxt":
+        raise NotImplementedError("Method from_zip is not implemented yet")
+
+    @classmethod
+    def from_dir(cls, feedback_dir: Path) -> "BugreportTxt":
+        raise NotImplementedError("Method from_zip is not implemented yet")
 
     def load(self) -> None:
         lines = self._read_file()
