@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python_bugreport_parser"
+version = "0.1.0"
+description = "Bugreport Parser"
+authors = [{ name = "Me", email = "me@example.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.10.6",
+    "pandas>=2.3.2",
+    "playwright>=1.50.0",
+]
+
+[tool.setuptools]
+packages = ["python_bugreport_parser"]
+
+[project.scripts]
+bugreport-parser = "main:main"
