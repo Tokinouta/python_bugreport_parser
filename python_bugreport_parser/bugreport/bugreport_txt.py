@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
-from python_bugreport_parser.bugreport.interfaces import LogInterface
+from python_bugreport_parser.bugreport.interfaces import LogFileInterface
 from python_bugreport_parser.bugreport.metadata import Metadata
 from python_bugreport_parser.bugreport.section import (
     SECTION_BEGIN,
@@ -15,10 +15,11 @@ from python_bugreport_parser.bugreport.section import (
     OtherSection,
     Section,
     SystemPropertySection,
+    SectionContent,
 )
 
 
-class BugreportTxt(LogInterface):
+class BugreportTxt(LogFileInterface):
     """
     A class to represent the bugreport.txt file and its contents.
     """
@@ -27,7 +28,7 @@ class BugreportTxt(LogInterface):
         self.raw_file = self._mmap_file(path)
         self.metadata = Metadata()
         self.sections: List[Section] = []
-        self.error_timestamp: datetime = None
+        self.error_timestamp: datetime = datetime.now()
         self.loaded: bool = False
 
     def set_error_timestamp(self, error_timestamp: datetime) -> None:
@@ -43,7 +44,7 @@ class BugreportTxt(LogInterface):
         return self.sections
 
     @classmethod
-    def from_zip(cls, zip_path: Path, feedback_dir: str) -> "BugreportTxt":
+    def from_zip(cls, zip_path: Path, feedback_dir: Path) -> "BugreportTxt":
         raise NotImplementedError("Method from_zip is not implemented yet")
 
     @classmethod
@@ -53,9 +54,11 @@ class BugreportTxt(LogInterface):
     def load(self) -> None:
         lines = self._read_file()
         self.metadata.parse(lines)
-        self.set_error_timestamp(self.metadata.timestamp) # set a default error timestamp
+        self.set_error_timestamp(
+            self.metadata.timestamp
+        )  # set a default error timestamp
 
-        current_section_lines = []
+        current_section_lines: List[str] = []
         section_start = ("", -1)
         for line_num, line in enumerate(
             lines[self.metadata.lines_passed :], start=self.metadata.lines_passed
@@ -99,7 +102,8 @@ class BugreportTxt(LogInterface):
 
     def _create_and_add_section(
         self, name: str, start_line: int, end_line: int, lines: List[str]
-    ) -> Section:
+    ):
+        section_content: SectionContent | None = None
         if name == "SYSTEM LOG" or name == "EVENT LOG":
             section_content = LogcatSection()
         elif name == "DUMPSYS":

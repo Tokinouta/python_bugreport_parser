@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timedelta
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional
 
 # Compile regex patterns once
 UPTIME_REGEX = re.compile(r"up (\d+) weeks?, (\d+) days?, (\d+) hours?, (\d+) minutes?")
@@ -23,7 +23,7 @@ class Metadata:
             f"Uptime: {self.uptime}\n"
         )
 
-    def parse(self, lines: Iterator[str]) -> None:
+    def parse(self, lines: List[str]) -> None:
         """Parse metadata from bugreport lines"""
         lines_iter = iter(lines)
         while True:
@@ -58,16 +58,30 @@ class Metadata:
             raise ValueError(f"Invalid timestamp format: {timestamp_str}") from e
 
     @staticmethod
-    def parse_version_and_product(line: str) -> str:
-        """Extract version and product from build fingerprint"""
+    def parse_version_and_product(line: str) -> tuple[str, str]:
+        """Extract version and product from build fingerprint.
+
+        Args:
+            line (str): The line containing the build fingerprint.
+
+        Returns:
+            tuple[str, str]: A tuple containing the version and product respectively.
+        """
         match = VERSION_REGEX.match(line)
         if not match:
             raise ValueError(f"Invalid version line: {line}")
-        return match.group(5), match.group(2)
+        return match.group(5), match.group(2)  # version, product
 
     @staticmethod
     def parse_uptime(line: str) -> timedelta:
-        """Convert uptime string to timedelta"""
+        """Convert uptime string to timedelta.
+
+        Args:
+            line (str): The line containing the uptime.
+
+        Returns:
+            timedelta: The uptime as a timedelta object.
+        """
         uptime_str = line.split("Uptime:", 1)[1].strip()
         match = UPTIME_REGEX.match(uptime_str)
         if not match:

@@ -36,20 +36,14 @@ class LocalRebootRecord:
         self.boot_reason: str = ""
 
     def merge_records(self, that: "LocalRebootRecord"):
-        self.miui_version = (
-            self.miui_version if len(self.miui_version) > 0 else that.miui_version
-        )
-        self.timestamp = (
-            self.timestamp if self.timestamp is not None else that.timestamp
-        )
+        self.miui_version = self.miui_version if len(self.miui_version) > 0 else that.miui_version
+        self.timestamp = self.timestamp if self.timestamp is not None else that.timestamp
         self.dgt = self.dgt if len(self.dgt) > 0 else that.dgt
         self.detail = self.detail if len(self.detail) > 0 else that.detail
         self.process = self.process if len(self.process) > 0 else that.process
         self.type = self.type if len(self.type) > 0 else that.type
         self.sum = self.sum if len(self.sum) > 0 else that.sum
-        self.boot_reason = (
-            self.boot_reason if len(self.boot_reason) > 0 else that.boot_reason
-        )
+        self.boot_reason = self.boot_reason if len(self.boot_reason) > 0 else that.boot_reason
 
     def isOk(self):
         return (
@@ -129,28 +123,20 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
     boot_records: List[LocalRebootRecord] = field(default_factory=list)
 
     @classmethod
-    def parse_line(
-        cls, name: str, log_string: str
-    ) -> Optional["MqsServiceDumpsysEntry"]:
+    def parse_line(cls, name: str, log_string: str) -> Optional["MqsServiceDumpsysEntry"]:
         """Parse a single line of dumpsys output into a MqsServiceDumpsysEntry object."""
         result = cls(name, log_string)
         lines = log_string.split("\n")
         current_line_index = 0
 
         # skip header lines to the reboot record section
-        def skip_to_next_section(
-            lines: List[str], section_start_line: str, current_index: int
-        ) -> int:
-            while current_index < len(lines) and not lines[current_index].startswith(
-                section_start_line
-            ):
+        def skip_to_next_section(lines: List[str], section_start_line: str, current_index: int) -> int:
+            while current_index < len(lines) and not lines[current_index].startswith(section_start_line):
                 current_index += 1
             current_index += 1  # skip the section start line itself
             return current_index
 
-        current_line_index = skip_to_next_section(
-            lines, REBOOT_RECORD_START, current_line_index
-        )
+        current_line_index = skip_to_next_section(lines, REBOOT_RECORD_START, current_line_index)
         entries, current_line_index = MqsServiceDumpsysEntry.parse_reboot_entries(
             lines[current_line_index:], current_line_index
         )
@@ -162,9 +148,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         #       just focus on the reboots.
         # Now we can store the HANGs into LocalRebootRecord as a temporary solution
 
-        current_line_index = skip_to_next_section(
-            lines, REBOOT_KERNEL_START, current_line_index
-        )
+        current_line_index = skip_to_next_section(lines, REBOOT_KERNEL_START, current_line_index)
         while current_line_index < len(lines):
             new_start = MqsServiceDumpsysEntry.parse_reboot_record(
                 lines, current_line_index, result.boot_records
@@ -179,7 +163,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
     @staticmethod
     def parse_reboot_entries(
         lines: List[str], current_line_index: int
-    ) -> LocalRebootRecord:
+    ) -> tuple[List[LocalRebootRecord], int]:
         result = []
         temp_record = LocalRebootRecord()
         for i, line in enumerate(lines):
@@ -206,9 +190,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         return result, current_line_index
 
     @staticmethod
-    def parse_reboot_record(
-        lines: List[str], current_line_index: int, results: List[LocalRebootRecord]
-    ):
+    def parse_reboot_record(lines: List[str], current_line_index: int, results: List[LocalRebootRecord]):
         # print(f"Parsing next section: {current_line_index}, {lines[current_line_index]}")
         current = current_line_index
         arecord = LocalRebootRecord()
@@ -224,9 +206,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
 
             record_modified = True
             if (key := "record time      :") and line.startswith(key):
-                arecord.timestamp = datetime.strptime(
-                    line[len(key) :], "%Y-%m-%d %H:%M:%S"
-                )
+                arecord.timestamp = datetime.strptime(line[len(key) :], "%Y-%m-%d %H:%M:%S")
                 continue
             elif (key := "vm reboot        :") and line.startswith(key):
                 arecord.type = line[len(key) :]
@@ -275,10 +255,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         if record_modified:
             for i, record in enumerate(results):
                 # print(record.timestamp, arecord.timestamp)
-                if (
-                    abs(record.timestamp - arecord.timestamp).total_seconds() < 5
-                    or record.dgt == arecord.dgt
-                ):
+                if abs(record.timestamp - arecord.timestamp).total_seconds() < 5 or record.dgt == arecord.dgt:
                     # print("Found existing record with the same timestamp")
                     results[i].merge_records(arecord)
                     break

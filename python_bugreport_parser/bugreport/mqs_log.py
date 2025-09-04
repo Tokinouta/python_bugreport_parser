@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Dict, List, Optional, DefaultDict, Pattern
 
+from python_bugreport_parser.bugreport.interfaces import LogFileInterface, LogLoadable
 from python_bugreport_parser.utils import unzip_and_delete
 
 SECTION_RE: Pattern[str] = re.compile(r"^-+ \((.*?)\) in (\d+s) -+$")
@@ -45,7 +46,7 @@ class LogType(Enum):
             return LogType.UNKNOWN
 
 
-class MqsLog:
+class MqsLog(LogFileInterface, LogLoadable):
     """
     Class to parse MQS logs.
     """
@@ -63,18 +64,22 @@ class MqsLog:
         self.type = LogType.JAVA_CRASH
 
     @classmethod
-    def from_zip(cls, zip_file: Path, unzip_dir: Path):
+    def from_zip(cls, zip_file: Path, unzip_dir: Path) -> Optional["MqsLog"]:
         """
         Create an instance of MqsLog from a zip file.
 
         :param zip_file: The zip file containing the log.
         :return: An instance of MqsLog.
         """
-        unzip_and_delete(zip_file, unzip_dir)
-        return MqsLog.from_dir(unzip_dir)
+        try:
+            unzip_and_delete(zip_file, unzip_dir)
+            return MqsLog.from_dir(unzip_dir)
+        except Exception as e:
+            print(f"Error unzipping MQS log zip: {e}")
+            return None
 
     @classmethod
-    def from_dir(cls, log_dir: Path):
+    def from_dir(cls, log_dir: Path) -> Optional["MqsLog"]:
         """
         Create an instance of MqsLog from a directory.
 
@@ -83,7 +88,9 @@ class MqsLog:
         instance = cls(None)
         log_file = next((log_dir.glob("-1*.txt")), None)
         if not log_file:
-            raise FileNotFoundError(f"No log file found in {log_dir}")
+            # raise FileNotFoundError(f"No log file found in {log_dir}")
+            print(f"No log file found in {log_dir}")
+            return None
 
         instance.log_data = log_file.read_text(encoding="utf-8")
         instance.type = LogType.from_string(str(log_file).split("_")[2])

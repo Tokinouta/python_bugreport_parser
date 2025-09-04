@@ -204,7 +204,7 @@ class AnrProcess:
             self.parse_thread_stack(thread_content.group(0))
 
     # Function to parse thread metadata and frames
-    def parse_thread_stack(self, thread_content: str) -> tuple:
+    def parse_thread_stack(self, thread_content: str):
         lines = thread_content.split("\n")
         thread = AnrThread()
         for i, line in enumerate(lines):

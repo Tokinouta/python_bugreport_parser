@@ -1,15 +1,18 @@
+from typing import Optional
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 import os
 
 from python_bugreport_parser.bugreport.bugreport_all import Log284
+from pathlib import Path
 
 
-def download_log(url):
+def download_log(url: str) -> Path:
     user_data_dir = "browser_cache"
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(
             user_data_dir,
+            channel='chrome',
             headless=False,
         )
 
@@ -42,10 +45,10 @@ def download_log(url):
             print(f"Download timed out: {e}")
         finally:
             browser.close()
-        return file_name
+    return Path(file_name)
 
 
-def download_one_file(feedback_id, user_feedback_path):
+def download_one_file(feedback_id: str, user_feedback_path: Path) -> Optional[Log284]:
     zip_file = download_log(
         f"https://feedback.pt.xiaomi.com/feedback/logDownloadBox?feedbackId={feedback_id}"
     )

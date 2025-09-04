@@ -6,7 +6,6 @@ from typing import Dict, List, Optional
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-import pandas as pd
 
 THERMAL_LOG_PATTERN = re.compile(
     r"(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2})\[(?P<tag>[^\]]+)\]\[VIRTUAL-SENSOR-FORMULA (?P<temperature>\d+)\] \{\s*(?P<kv_pairs>(\[[^\[\]]+\]\s*)+)\}"
@@ -14,6 +13,7 @@ THERMAL_LOG_PATTERN = re.compile(
 
 THERMAL_KV_PATTERN = re.compile(r"\[(?P<key>[^\[\] ]+)\s+(?P<value>[^\[\] ]+)\]")
 
+# TODO: perhaps we also need an enum for each section type?
 
 @dataclass
 class MiniDumpRecord:
@@ -78,10 +78,7 @@ class ThermalRecord:
 
         :return: String representation of the object.
         """
-        return (
-            f"ThermalRecord(timestamp={self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}, "
-            f"tag={self.tag})"
-        )
+        return f"ThermalRecord(timestamp={self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}, " f"tag={self.tag})"
 
     @classmethod
     def parse(cls, line: str) -> Optional["ThermalRecord"]:
@@ -91,9 +88,7 @@ class ThermalRecord:
 
         instance = cls()
         instance.tag = match.group("tag")
-        instance.timestamp = datetime.strptime(
-            match.group("timestamp"), "%m-%d %H:%M:%S"
-        )
+        instance.timestamp = datetime.strptime(match.group("timestamp"), "%m-%d %H:%M:%S")
         instance.temperatures = dict()
         instance.temperatures["virtual_sensor"] = int(match.group("temperature"))
 
@@ -112,23 +107,10 @@ class DumpstateBoard:
     """
 
     def __init__(self):
-        """
-        Initialize the DumpstateBoard object with data.
-
-        :param data: The data to initialize the object with.
-        """
-        self.sections: List[str] = []
+        self.sections: Dict[str, List[str]] = {}
         self.mini_dump_records: List[MiniDumpRecord] = []
         self.kernel_log: str = ""
         self.temperature_log: List[ThermalRecord] = []
-
-    def __repr__(self):
-        """
-        Return a string representation of the DumpstateBoard object.
-
-        :return: String representation of the object.
-        """
-        return f"DumpstateBoard(data={self.data})"
 
     def load(self, dumpstate_board_path: Path) -> None:
         """
@@ -138,9 +120,8 @@ class DumpstateBoard:
         """
 
         pattern = re.compile(r"^------ ([\w ]+) \(.*\)")
-        sections = []
-        current_name = None
-        current_content = []
+        current_name: Optional[str] = None
+        current_content: List[str] = []
 
         with open(dumpstate_board_path, "r", encoding="utf-8", errors="ignore") as file:
             for line in file:
@@ -149,19 +130,21 @@ class DumpstateBoard:
                 if match:
                     # Save the current section if there's any content or a name
                     if current_name is not None or current_content:
-                        sections.append((current_name, current_content))
-                        if current_name == "minidump history":
-                            self.parse_minidump_history(current_content)
-                        elif current_name == "THERMAL DUMP LOG":
-                            self.parse_thermal_log(current_content)
+                        self.sections[current_name] = current_content
+                        match current_name:
+                            case "minidump history":
+                                self.parse_minidump_history(current_content)
+                            case "THERMAL DUMP LOG":
+                                self.parse_thermal_log(current_content)
+                            case _:
+                                pass
                         current_content = []
                     current_name = match.group(1)
                 else:
                     current_content.append(line)
             # Add the last section after the loop ends
             if current_name is not None or current_content:
-                sections.append((current_name, current_content))
-        self.sections = sections
+                self.sections[current_name] = current_content
         # print("minidump history ", "\n".join([str(record) for record in self.mini_dump_records]))
 
     def parse_minidump_history(self, current_content) -> None:
@@ -183,11 +166,7 @@ class DumpstateBoard:
                 self.temperature_log.append(parsed_record)
 
     def draw_temp_graph(self) -> None:
-        x_data = [
-            record.timestamp
-            for record in self.temperature_log
-            if record.tag == "SS-CPU0"
-        ]
+        x_data = [record.timestamp for record in self.temperature_log if record.tag == "SS-CPU0"]
         y_data = [
             record.temperatures["virtual_sensor"]
             for record in self.temperature_log
