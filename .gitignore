@@ -95,3 +95,6 @@ example.txt
 
 # browser cache
 browser_cache/
+
+# parser output
+output*.txt
