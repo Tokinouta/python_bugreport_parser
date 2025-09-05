@@ -8,6 +8,7 @@ from python_bugreport_parser.bugreport.bugreport_txt import BugreportTxt
 from python_bugreport_parser.bugreport.dumpstate_board import DumpstateBoard
 from python_bugreport_parser.bugreport.interfaces import LogFileInterface, LogLoadable
 from python_bugreport_parser.utils import unzip_and_delete
+from python_bugreport_parser.bugreport import logger
 
 
 class BugreportDirs:
@@ -48,7 +49,7 @@ class Bugreport(LogFileInterface, LogLoadable):
         self.bugreport_dirs: BugreportDirs = None
         self.bugreport_txt: BugreportTxt = None
         self.anr_records: List[AnrRecord] = []
-        self.miuilog_reboots: List[str] = []
+        self.miuilog_reboots: List[str] = [] # TODO: These should be MqsLogs
         self.miuilog_scouts: List[AnrRecord] = []
         self.dumpstate_board: DumpstateBoard = None
 
@@ -58,7 +59,7 @@ class Bugreport(LogFileInterface, LogLoadable):
             unzip_and_delete(zip_path, feedback_dir)
             return Bugreport.from_dir(feedback_dir)
         except Exception as e:
-            print(f"Error unzipping bugreport zip: {e}")
+            logger.error(f"Error unzipping bugreport zip: {e}")
             return None
 
     @classmethod
@@ -67,7 +68,7 @@ class Bugreport(LogFileInterface, LogLoadable):
         try:
             bugreport.bugreport_dirs = Bugreport._load_required_file_paths(feedback_dir)
         except FileNotFoundError as e:
-            print(e)
+            logger.error(str(e))
             return None
         bugreport.load()
         return bugreport
@@ -88,8 +89,8 @@ class Bugreport(LogFileInterface, LogLoadable):
             self.dumpstate_board = DumpstateBoard()
             self.dumpstate_board.load(self.bugreport_dirs.dumpstate_board_path)
         else:
-            print("No dumpstate board file found")
-        print("Loaded bugreport:", self)
+            logger.warning("No dumpstate board file found")
+        logger.info(f"Loaded bugreport: {self}")
         # print(len(self.anr_records), len(self.miuilog_reboots), len(self.miuilog_scouts))
 
     @staticmethod
@@ -108,7 +109,7 @@ class Bugreport(LogFileInterface, LogLoadable):
         # Find bugreport txt file
         bugreport_txt_path = next(iter(glob.glob(str(bugreport_dir / "bugreport*.txt"))), None)
         if not bugreport_txt_path:
-            print("No bugreport*.txt file found")
+            logger.warning("No bugreport*.txt file found")
             raise FileNotFoundError("No bugreport*.txt file found")
         else:
             bugreport_dirs.bugreport_txt_path = Path(bugreport_txt_path)
@@ -122,10 +123,10 @@ class Bugreport(LogFileInterface, LogLoadable):
         anr_files_dir = bugreport_dir / "FS" / "data" / "anr"
         if os.path.isdir(anr_files_dir):
             for file in os.listdir(anr_files_dir):
-                print(file)
+                logger.debug(file)
                 bugreport_dirs.anr_files.append(anr_files_dir / file)
         else:
-            print("No anr folder found")
+            logger.debug("No anr folder found")
 
         # Find MQS reboot files
         reboot_mqs_dir = bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "reboot"
@@ -138,12 +139,12 @@ class Bugreport(LogFileInterface, LogLoadable):
                 try:
                     unzip_and_delete(Path(zip_file), Path(extract_dir))
                 except Exception as e:
-                    print(f"Error unzipping {zip_file}: {e}")
+                    logger.error(f"Error unzipping {zip_file}: {e}")
                 else:
-                    print(f"Unzipped {zip_file} to {extract_dir}")
+                    logger.info(f"Unzipped {zip_file} to {extract_dir}")
                     bugreport_dirs.miuilog_reboot_dirs.append(Path(extract_dir))
         else:
-            print("No reboot mqs folder found")
+            logger.debug("No reboot mqs folder found")
 
         # Find Scout files
         scout_mqs_dir = bugreport_dir / "FS" / "data" / "miuilog" / "stability" / "scout"
@@ -151,22 +152,22 @@ class Bugreport(LogFileInterface, LogLoadable):
             # Unzip all zip files in this folder
             if (scout_app_dir := scout_mqs_dir / "app") and os.path.isdir(scout_app_dir):
                 for zip_file in os.listdir(scout_app_dir):
-                    print(zip_file)
+                    logger.debug(zip_file)
                     if os.path.isdir(scout_app_dir / zip_file):
                         bugreport_dirs.miuilog_scout_dirs.append(scout_app_dir / zip_file)
             if (scout_sys_dir := scout_mqs_dir / "sys") and os.path.isdir(scout_sys_dir):
                 for zip_file in os.listdir(scout_sys_dir):
-                    print(zip_file)
+                    logger.debug(zip_file)
                     if os.path.isdir(scout_sys_dir / zip_file):
                         bugreport_dirs.miuilog_scout_dirs.append(scout_sys_dir / zip_file)
             if (scout_watchdog_dir := scout_mqs_dir / "watchdog") and os.path.isdir(scout_watchdog_dir):
                 for zip_file in os.listdir(scout_watchdog_dir):
-                    print(zip_file)
+                    logger.debug(zip_file)
                     bugreport_dirs.miuilog_scout_dirs.append(scout_watchdog_dir / zip_file)
         else:
-            print("No scout mqs folder found")
+            logger.debug("No scout mqs folder found")
 
-        print("Ready to return ", bugreport_dirs)
+        logger.debug(f"Ready to return {bugreport_dirs}")
         return bugreport_dirs
 
 
@@ -191,7 +192,7 @@ class Log284(LogFileInterface, LogLoadable):
             unzip_and_delete(zip_path, feedback_dir)
             return Log284.from_dir(feedback_dir)
         except Exception as e:
-            print(f"Error unzipping 284 log: {e}")
+            logger.error(f"Error unzipping 284 log: {e}")
             return None
 
     @classmethod
@@ -201,7 +202,7 @@ class Log284(LogFileInterface, LogLoadable):
         try:
             bugreport_dirs = Log284._load_required_file_paths(feedback_dir)
         except FileNotFoundError as e:
-            print(e)
+            logger.error(str(e))
             return None
         log284.bugreport_dirs = bugreport_dirs
 
@@ -217,7 +218,7 @@ class Log284(LogFileInterface, LogLoadable):
             bugreport_dirs (BugreportDirs): The directories containing the bugreport and mtdoops.md files.
         """
         self.bugreport.load()
-        print(self.bugreport_dirs.mtdoops_md_path)
+        logger.debug(self.bugreport_dirs.mtdoops_md_path)
         # TODO: We need to change these paths to optionals, i.e. they may be None to represent nonexistant files
         if self.bugreport_dirs.mtdoops_md_path:
             with open(self.bugreport_dirs.mtdoops_md_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -243,14 +244,14 @@ class Log284(LogFileInterface, LogLoadable):
             FileNotFoundError: If the required files are not found, particularly the bugreport.txt file.
         """
         bugreport_dir = feedback_dir / "bugreport"
-        print(bugreport_dir)
+        logger.debug(bugreport_dir)
 
         # Unzip the bugreport if not extracted
         bugreport_zip_path = next(iter(glob.glob(str(feedback_dir / "bugreport*.zip"))), None)
         if not bugreport_zip_path:
-            print("No bugreport*.zip file found")
+            logger.debug("No bugreport*.zip file found")
         else:
-            print(bugreport_dir, bugreport_zip_path)
+            logger.debug(f"{bugreport_dir} {bugreport_zip_path}")
             try:
                 unzip_and_delete(Path(bugreport_zip_path), bugreport_dir)
             except Exception as e:
@@ -266,22 +267,22 @@ class Log284(LogFileInterface, LogLoadable):
         if (mtdoops_md_path := feedback_dir / "mtdoops.md") and mtdoops_md_path.exists():
             paths.mtdoops_md_path = mtdoops_md_path
         else:
-            print("No mtdoops.md file found")
+            logger.debug("No mtdoops.md file found")
 
         if (offline_log_path := feedback_dir / "offlinelog") and offline_log_path.exists():
             paths.offline_log_path = offline_log_path
         elif (offline_log_path := feedback_dir / "log") and offline_log_path.exists():
             paths.offline_log_path = offline_log_path
         else:
-            print("No offline.log file found")
+            logger.debug("No offline.log file found")
 
         if (misight_zip_path := feedback_dir / "misight.zip") and misight_zip_path.exists():
             paths.misight_path = feedback_dir / "misight"
             try:
                 unzip_and_delete(misight_zip_path, paths.misight_path)
             except Exception as e:
-                print(f"Error unzipping misight.zip: {e}")
+                logger.error(f"Error unzipping misight.zip: {e}")
         else:
-            print("No misight.zip file found")
+            logger.debug("No misight.zip file found")
 
         return paths

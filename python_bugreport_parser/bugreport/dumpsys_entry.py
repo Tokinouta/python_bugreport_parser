@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
+from python_bugreport_parser.bugreport import logger
 
 REBOOT_RECORD_START = "---------- Abnormal reboot records ----------"
 # REBOOT_RECORD_START = "---------- kernel abnormal reboot records ----------"
@@ -141,7 +142,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
             lines[current_line_index:], current_line_index
         )
         result.boot_records.extend(entries)
-        # print(lines[current_line_index])
+        logger.debug(lines[current_line_index])
 
         # TODO: we also need to parse the hang records, but we need to have a new
         #       data structure for that. These records are for ANRs, and now we
@@ -167,7 +168,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         result = []
         temp_record = LocalRebootRecord()
         for i, line in enumerate(lines):
-            # print(line)
+            logger.debug(line)
             if BEGIN_OF_NEXT_SECTION.match(line):
                 break
 
@@ -191,7 +192,7 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
 
     @staticmethod
     def parse_reboot_record(lines: List[str], current_line_index: int, results: List[LocalRebootRecord]):
-        # print(f"Parsing next section: {current_line_index}, {lines[current_line_index]}")
+        logger.debug(f"Parsing next section: {current_line_index}, {lines[current_line_index]}")
         current = current_line_index
         arecord = LocalRebootRecord()
         record_modified = False
@@ -199,9 +200,9 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         while current < len(lines):
             line = lines[current]
             current += 1
-            # print(line)
+            logger.debug(line)
             if BEGIN_OF_NEXT_SECTION.match(line) or line == record_end_line:
-                # print("----------------section end--------------------")
+                logger.debug("----------------section end--------------------")
                 break
 
             record_modified = True
@@ -254,9 +255,9 @@ class MqsServiceDumpsysEntry(DumpsysEntry):
         # find the one with the same timestamp
         if record_modified:
             for i, record in enumerate(results):
-                # print(record.timestamp, arecord.timestamp)
+                logger.debug(f"{record.timestamp} {arecord.timestamp}")
                 if abs(record.timestamp - arecord.timestamp).total_seconds() < 5 or record.dgt == arecord.dgt:
-                    # print("Found existing record with the same timestamp")
+                    logger.debug("Found existing record with the same timestamp")
                     results[i].merge_records(arecord)
                     break
             else:

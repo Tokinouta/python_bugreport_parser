@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from dateutil.parser import isoparse
+from python_bugreport_parser.bugreport import logger
 
 SECTION_PATTERN = re.compile(  # Regex pattern to match each section, including the delimiter lines
     r"----- (pid \d+|Waiting Channels: pid \d+) at [\d\-:\.\+ ]+ -----.*?----- end \d+ -----",
@@ -17,9 +18,7 @@ THREAD_SPLIT_PATTERN = re.compile(r'"(?P<thread_name>.*?)"[\s\S]*?\n\n', re.MULT
 NATIVE_FRAME_PATTERN = re.compile(
     r"^\s*(native:\s*)?#(?P<frame_number>\d{2}) pc (?P<pc_address>[0-9a-f]+)\s+(?P<library_path>\S+)\s+(?:\((?P<symbol_name>.+?)\))?\s+(?:\(BuildId: (?P<build_id>[^\)]+)\))?",
 )
-JAVA_FRAME_PATTERN = re.compile(
-    r"^\s*at\s+(?P<symbol_name>.*?)\((?P<source_code_path>.*)\)$"
-)
+JAVA_FRAME_PATTERN = re.compile(r"^\s*at\s+(?P<symbol_name>.*?)\((?P<source_code_path>.*)\)$")
 FAILED_FRAME_PATTERN = re.compile(r"sysTid=(\d+)\s+state=(\w)\s+(\S+)")
 THREAD_NAME_PATTERN = re.compile(r'"(?P<thread_name>.*?)"')
 LOCK_PATTERN = re.compile(
@@ -178,7 +177,7 @@ class AnrProcess:
 
     # Function to parse all threads and lock contentions
     def parse_threads(self, file_content: str) -> None:
-        # print(f"is_valid: {self.is_valid}")
+        logger.debug(f"is_valid: {self.is_valid}")
         if not self.is_valid:
             lines = file_content.strip().split("\n")
             for line in lines:
@@ -197,7 +196,7 @@ class AnrProcess:
             return
 
         for thread_content in THREAD_SPLIT_PATTERN.finditer(file_content):
-            # print(thread_content)
+            logger.debug(thread_content)
             if not thread_content:
                 continue
 
@@ -210,7 +209,7 @@ class AnrProcess:
         for i, line in enumerate(lines):
             if (match := THREAD_NAME_PATTERN.match(line)) and match:
                 thread.name = match.group("thread_name")
-                line = line[len(thread.name) + 2:]
+                line = line[len(thread.name) + 2 :]
                 attr_temp = ""
                 for attr in line.split(" "):
                     attr = attr.strip()
@@ -225,7 +224,7 @@ class AnrProcess:
                         attr = attr_temp + " " + attr
                         attr_temp = ""
 
-                    print(attr)
+                    logger.debug(attr)
                     if attr.find("=") >= 0:
                         key, val = attr.split("=")
                     else:
@@ -253,7 +252,7 @@ class AnrProcess:
                 lock_status = match.group(1).strip()
                 lock_address = match.group(2).strip()
                 lock_object = match.group(3).strip("()")
-                # print("lock: ", lock_status, lock_address)
+                logger.debug(f"lock: {lock_status} {lock_address}")
                 if lock_address not in self.lock_info:
                     self.lock_info[lock_address] = AnrLockInfo()
                     self.lock_info[lock_address].lock_address = lock_address
@@ -265,48 +264,44 @@ class AnrProcess:
                 elif lock_status == "locked":
                     self.lock_info[lock_address].holding_threads.append(thread.name)
 
-                thread.lock_info.append(
-                    (lock_status, lock_address, lines[i - 1].strip())
-                )
-                thread.frames[-1].holding_lock = (
-                    f"{lock_status} lock {lock_address} ({lock_object})"
-                )
+                thread.lock_info.append((lock_status, lock_address, lines[i - 1].strip()))
+                thread.frames[-1].holding_lock = f"{lock_status} lock {lock_address} ({lock_object})"
         self.threads.append(thread)
         # return thread_name, metadata, frames, lock_info
 
     # Function to display parsed thread and lock information
     def display_thread_and_lock_info(self):
-        print("Process Information:")
+        logger.info("Process Information:")
         for key, value in self.process_info.items():
-            print(f"{key}: {value}")
-        print("-" * 40)
+            logger.info(f"{key}: {value}")
+        logger.info("-" * 40)
 
-        print("\nThread Stack Report:")
+        logger.info("\nThread Stack Report:")
         for thread in self.threads:
-            print(f"\nThread Name: {thread.name}")
-            print("Metadata:")
+            logger.info(f"\nThread Name: {thread.name}")
+            logger.info("Metadata:")
             for key, value in thread.metadata.items():
-                print(f"  {key}: {value}")
+                logger.info(f"  {key}: {value}")
 
-            print("Frames:")
+            logger.info("Frames:")
             for frame in thread.frames:
-                print(f"  {frame.symbol_name}, {frame.holding_lock}")
+                logger.info(f"  {frame.symbol_name}, {frame.holding_lock}")
 
-            print("Lock Information:")
+            logger.info("Lock Information:")
             for lock_status, lock, _ in thread.lock_info:
-                print(f"  {lock_status} lock 0x{lock}")
+                logger.info(f"  {lock_status} lock 0x{lock}")
 
-        print("\nLock Contentions Report:")
+        logger.info("\nLock Contentions Report:")
         for lock_address, lock in self.lock_info.items():
             holding = lock.holding_threads
             waiting = lock.waiting_threads
 
             if holding:
-                print(f"Lock {lock_address} is held by: {", ".join(holding)}")
+                logger.info(f"Lock {lock_address} is held by: {", ".join(holding)}")
 
             if waiting:
-                print(f"Lock {lock_address} is being waited by: {", ".join(waiting)}")
-            print("-" * 40)
+                logger.info(f"Lock {lock_address} is being waited by: {", ".join(waiting)}")
+            logger.info("-" * 40)
 
 
 class AnrRecord:
@@ -316,7 +311,7 @@ class AnrRecord:
 
     def load(self, path: Path) -> None:
         record_file = path
-        print(str(path.absolute()))
+        logger.debug(str(path.absolute()))
         if "scout" in str(path.absolute()):
             # find the file with name containing "self-trace"
             for file in path.glob("*"):
@@ -324,9 +319,9 @@ class AnrRecord:
                     record_file = file
                     break
             else:
-                print("No self-trace file found")
+                logger.warning("No self-trace file found")
                 return
-        print(record_file)
+        logger.debug(record_file)
         if "SCOUT" in record_file.name:
             self.type = "SCOUT"
         else:
@@ -345,5 +340,5 @@ class AnrRecord:
         for match in SECTION_PATTERN.finditer(file_content):
             # Append the section as a whole (including delimiter lines)
             section_content = match.group(0) if match else ""
-            # print(type(section_content), len())
+            logger.debug(f"section_content type: {type(section_content)}, len: {len(section_content)}")
             self.traces.append(AnrProcess.from_raw_str(section_content))

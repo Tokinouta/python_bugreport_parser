@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from python_bugreport_parser.bugreport import logger
 
 THERMAL_LOG_PATTERN = re.compile(
     r"(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2})\[(?P<tag>[^\]]+)\]\[VIRTUAL-SENSOR-FORMULA (?P<temperature>\d+)\] \{\s*(?P<kv_pairs>(\[[^\[\]]+\]\s*)+)\}"
@@ -31,11 +32,11 @@ class MiniDumpRecord:
         :param data: The data string to parse.
         """
         # Example parsing logic (to be customized based on actual data format)
-        # print("data", data, "data type", type(data))
+        logger.debug(f"data: {data}, data type: {type(data)}")
         if not data.strip() or data.find("|") == -1:
             return None
         # Assuming the data format is "version_index|timestamp|crash_reason|crash_details"
-        print(data)
+        logger.debug(data)
         version_index, timestamp_str, crash_reason, crash_details = data.split("|")
         index, version = version_index.split(" ")
 
@@ -125,7 +126,7 @@ class DumpstateBoard:
 
         with open(dumpstate_board_path, "r", encoding="utf-8", errors="ignore") as file:
             for line in file:
-                # print(line)
+                logger.debug(line)
                 match = pattern.match(line)
                 if match:
                     # Save the current section if there's any content or a name
@@ -145,7 +146,7 @@ class DumpstateBoard:
             # Add the last section after the loop ends
             if current_name is not None or current_content:
                 self.sections[current_name] = current_content
-        # print("minidump history ", "\n".join([str(record) for record in self.mini_dump_records]))
+        logger.debug(f"minidump history: {'\n'.join([str(record) for record in self.mini_dump_records])}")
 
     def parse_minidump_history(self, current_content) -> None:
         """
@@ -176,7 +177,7 @@ class DumpstateBoard:
         _, ax = plt.subplots(figsize=(10, 4))
 
         # Plotting
-        ax.scatter(x_data, y_data)
+        ax.scatter(mdates.date2num(x_data), y_data)
 
         # Set formatter for x-axis
         date_format = mdates.DateFormatter("%m-%d %H:%M:%S")
