@@ -12,6 +12,7 @@ dependencies = [
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
     "playwright>=1.50.0",
+    "typer>=0.17.4",
     "types-python-dateutil>=2.9.0.20250822",
 ]
 
