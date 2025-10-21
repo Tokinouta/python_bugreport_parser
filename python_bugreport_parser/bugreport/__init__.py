@@ -8,7 +8,7 @@ logger.setLevel(logging.DEBUG)  # Default level, can be overridden by the applic
 if not logger.handlers:
     # Console handler
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO)
     
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

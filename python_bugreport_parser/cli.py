@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing_extensions import Annotated
 
-from python_bugreport_parser.bugreport.bugreport_all import Bugreport, Log284
+from python_bugreport_parser.bugreport.bugreport_all import Log284
 from python_bugreport_parser.plugins import BugreportAnalysisContext, PluginRepo
 from python_bugreport_parser.download import download_one_file
 

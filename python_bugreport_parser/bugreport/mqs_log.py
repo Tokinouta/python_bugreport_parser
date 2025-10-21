@@ -7,7 +7,7 @@ import re
 from enum import Enum
 from pathlib import Path
 from collections import defaultdict
-from typing import Dict, List, Optional, DefaultDict, Pattern
+from typing import Any, Dict, List, Optional, DefaultDict, Pattern
 
 from python_bugreport_parser.bugreport.interfaces import LogFileInterface, LogLoadable
 from python_bugreport_parser.utils import unzip_and_delete
@@ -51,6 +51,7 @@ class MqsLog(LogFileInterface, LogLoadable):
     """
     Class to parse MQS logs.
     """
+
     def __init__(self) -> None:
         self.log_data: str = ""
         self.type = LogType.MQS_LOG
@@ -123,9 +124,6 @@ class MqsLog(LogFileInterface, LogLoadable):
                     sections[current_section].append(line)
 
         # Combine results at the end
-        result: Dict[str, Any] = {
-            "header": header,
-            "sections": sections
-        }
+        result: Dict[str, Any] = {"header": header, "sections": sections}
 
         return result
