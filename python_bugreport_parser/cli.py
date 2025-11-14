@@ -6,6 +6,7 @@ from typing_extensions import Annotated
 from python_bugreport_parser.bugreport.bugreport_all import Log284
 from python_bugreport_parser.plugins import BugreportAnalysisContext, PluginRepo
 from python_bugreport_parser.download import download_one_file
+# from python_bugreport_parser.repl import start_repl
 
 
 @dataclass
@@ -17,6 +18,7 @@ class CliArgs:
     download: bool
     analyse: bool
     idsubdir: bool
+    repl: bool
 
 
 def main(
@@ -36,6 +38,14 @@ def main(
             show_default=True,
         ),
     ] = False,
+    repl: Annotated[
+        bool,
+        typer.Option(
+            "--repl",
+            help="Enter interactive REPL mode",
+            show_default=True,
+        ),
+    ] = False,
 ) -> None:
     """Bugreport processing CLI tool"""
     # If neither download nor analyse is specified, do both
@@ -44,8 +54,13 @@ def main(
     #     analyse = True
 
     args = CliArgs(
-        path=path, feedback_id=feedback_id, download=download, analyse=analyse, idsubdir=idsubdir
+        path=path, feedback_id=feedback_id, download=download, analyse=analyse, idsubdir=idsubdir, repl=repl
     )
+    
+    if repl:
+        # start_repl()
+        return
+    
     process_bugreport(args)
 
 def process_bugreport(cli_args: CliArgs) -> None:

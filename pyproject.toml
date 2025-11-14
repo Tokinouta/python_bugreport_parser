@@ -19,5 +19,8 @@ dependencies = [
 [tool.setuptools]
 packages = ["python_bugreport_parser"]
 
+[tool.isort]
+profile = "black"
+
 [project.scripts]
 bugreport-parser = "main:main"
