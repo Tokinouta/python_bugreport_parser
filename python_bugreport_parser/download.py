@@ -12,7 +12,6 @@ def download_log(url: str) -> Path:
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(
             user_data_dir,
-            channel='chrome',
             headless=False,
         )
 
